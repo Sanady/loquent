@@ -140,3 +140,9 @@ def test_multi_select_duplicates_rejected_empty_accepted():
 def test_malformed_args_raise_only_invalid_answer(tool, args, answer):
     with pytest.raises(InvalidAnswer):
         validate_answer(tool, args, answer)
+
+
+@pytest.mark.parametrize("ftype", ["number", "integer"])
+def test_form_huge_int_accepted_without_overflow(ftype):
+    args = Form("f", {"type": "object", "properties": {"n": {"type": ftype}}}).args()
+    validate_answer("loquent_form", args, {"values": {"n": 10**400}})

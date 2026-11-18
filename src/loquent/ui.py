@@ -209,7 +209,7 @@ def _check_field(name: str, spec: Any, value: Any) -> None:
         ok = (
             isinstance(value, (int, float))
             and not isinstance(value, bool)
-            and math.isfinite(value)
+            and (isinstance(value, int) or math.isfinite(value))
         )
     else:
         raise InvalidAnswer(f"field {name!r} has unsupported type {t!r}")
