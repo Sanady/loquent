@@ -24,6 +24,7 @@ from loquent.adapters.base import AgentError
 from loquent.context import RunContext
 from loquent.protocol import new_id
 
+_INVALID = "Upstream model returned an invalid response"
 _TEXT_ROLES = ("user", "system", "developer")
 
 
@@ -128,6 +129,8 @@ class OpenAICompatAdapter:
         text_id: str | None = None
         text_open = False
         calls: dict[int, dict[str, str]] = {}
+        finished = False
+        error: str | None = None
         try:
             async with self._client.stream(
                 "POST", self._url, json=body, headers=headers
@@ -136,36 +139,63 @@ class OpenAICompatAdapter:
                     raise AgentError(f"Upstream model returned HTTP {resp.status_code}")
                 async for line in resp.aiter_lines():
                     if not line.startswith("data:"):
-                        continue
+                        continue  # blank lines, ": ping" keepalives, other SSE fields
                     data = line[5:].strip()
                     if data == "[DONE]":
+                        finished = True
                         break
                     try:
                         chunk = json.loads(data)
                     except ValueError:
-                        continue
-                    for choice in chunk.get("choices") or []:
+                        raise AgentError(_INVALID) from None
+                    if not isinstance(chunk, dict):
+                        raise AgentError(_INVALID)
+                    if chunk.get("error"):
+                        raise AgentError("Upstream model reported an error")
+                    choices = chunk.get("choices") or []
+                    if not isinstance(choices, list):
+                        raise AgentError(_INVALID)
+                    for choice in choices:
+                        if not isinstance(choice, dict):
+                            raise AgentError(_INVALID)
+                        if choice.get("finish_reason"):
+                            finished = True
                         d = choice.get("delta") or {}
+                        if not isinstance(d, dict):
+                            raise AgentError(_INVALID)
                         content = d.get("content")
-                        if content:
+                        if isinstance(content, str) and content:
                             if not text_open:
                                 text_id = new_id()
                                 text_open = True
                                 yield TextMessageStartEvent(message_id=text_id, role="assistant")
                             yield TextMessageContentEvent(message_id=text_id, delta=content)
-                        for tc in d.get("tool_calls") or []:
+                        tcs = d.get("tool_calls") or []
+                        if not isinstance(tcs, list):
+                            raise AgentError(_INVALID)
+                        for tc in tcs:
+                            if not isinstance(tc, dict):
+                                raise AgentError(_INVALID)
+                            fn = tc.get("function") or {}
+                            if not isinstance(fn, dict):
+                                raise AgentError(_INVALID)
                             slot = calls.setdefault(
                                 tc.get("index", 0), {"id": "", "name": "", "args": ""}
                             )
-                            fn = tc.get("function") or {}
                             slot["id"] = tc.get("id") or slot["id"]
                             slot["name"] += fn.get("name") or ""
                             slot["args"] += fn.get("arguments") or ""
-        except httpx.TransportError:
-            raise AgentError("Could not reach the model endpoint") from None
+                if not (finished or text_open or calls):
+                    raise AgentError(_INVALID)
+        except AgentError as e:
+            error = str(e)
+        except (httpx.HTTPError, httpx.InvalidURL):
+            error = "Could not reach the model endpoint"
 
         if text_open:
             yield TextMessageEndEvent(message_id=text_id)
+        if error is not None:
+            raise AgentError(error)
         for _, call in sorted(calls.items()):
             if not call["name"]:
                 continue

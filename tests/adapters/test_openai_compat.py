@@ -241,3 +241,79 @@ def test_capabilities():
     a = OpenAICompatAdapter("https://x/v1", "m", None)
     assert a.supports_widgets is True
     assert a.supports_attachments is False
+
+
+def raw(body: str, seen=None):
+    def handler(request):
+        return httpx.Response(200, content=body.encode(), headers={"content-type": "text/event-stream"})
+
+    return handler
+
+
+INVALID = "Upstream model returned an invalid response"
+
+
+async def test_malformed_json_raises_agent_error():
+    with pytest.raises(AgentError) as ei:
+        await run(make(raw("data: {not json secret-body\n\n")))
+    assert str(ei.value) == INVALID
+
+
+async def test_non_dict_chunk_raises():
+    with pytest.raises(AgentError) as ei:
+        await run(make(raw("data: []\n\n")))
+    assert str(ei.value) == INVALID
+
+
+async def test_non_dict_delta_raises():
+    body = 'data: {"choices": [{"delta": "oops"}]}\n\n'
+    with pytest.raises(AgentError) as ei:
+        await run(make(raw(body)))
+    assert str(ei.value) == INVALID
+
+
+async def test_in_stream_error_chunk_hides_upstream_text():
+    body = 'data: {"error": {"message": "quota exceeded for sk-secret"}}\n\n'
+    with pytest.raises(AgentError) as ei:
+        await run(make(raw(body)))
+    assert str(ei.value) == "Upstream model reported an error"
+    assert "quota" not in str(ei.value)
+
+
+async def test_keepalive_and_usage_chunks_tolerated():
+    body = (
+        ": ping\n\n"
+        + f"data: {json.dumps(delta(content='hi'))}\n\n"
+        + 'data: {"choices": [], "usage": {"total_tokens": 3}}\n\n'
+        + "data: [DONE]\n\n"
+    )
+    ev = await run(make(raw(body)))
+    assert types(ev) == ["TEXT_MESSAGE_START", "TEXT_MESSAGE_CONTENT", "TEXT_MESSAGE_END"]
+
+
+async def test_empty_stream_without_done_raises():
+    with pytest.raises(AgentError) as ei:
+        await run(make(raw('{"not": "sse"}')))
+    assert str(ei.value) == INVALID
+
+
+async def test_text_then_transport_error_closes_text_message():
+    class Boom(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield f"data: {json.dumps(delta(content='partial'))}\n\n".encode()
+            raise httpx.ReadError("secret")
+
+    def handler(request):
+        return httpx.Response(200, stream=Boom())
+
+    adapter = make(handler)
+    inp = RunAgentInput(thread_id="t", run_id="r", state={}, messages=[], tools=[], context=[],
+                        forwarded_props={})
+    ctx = RunContext(thread_id="t", run_id="r",
+                     messages=[UserMessage(id="u", role="user", content="hi")])
+    got = []
+    with pytest.raises(AgentError) as ei:
+        async for e in adapter.run(inp, ctx):
+            got.append(e)
+    assert str(ei.value) == "Could not reach the model endpoint"
+    assert types(got) == ["TEXT_MESSAGE_START", "TEXT_MESSAGE_CONTENT", "TEXT_MESSAGE_END"]
