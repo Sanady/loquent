@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -171,21 +172,29 @@ def is_widget_tool(name: str) -> bool:
     return name in _NAMES
 
 
-def _option_values(options: Any) -> set[str]:
-    values: set[str] = set()
-    for o in options or []:
+def _option_values(options: Any) -> list[str]:
+    if not isinstance(options, (list, tuple)):
+        raise InvalidAnswer("widget options are malformed")
+    values: list[str] = []
+    for o in options:
         if isinstance(o, str):
-            values.add(o)
+            values.append(o)
         elif isinstance(o, dict) and isinstance(o.get("value"), str):
-            values.add(o["value"])
+            values.append(o["value"])
         elif isinstance(o, (list, tuple)) and o and isinstance(o[0], str):
-            values.add(o[0])
+            values.append(o[0])
+        else:
+            raise InvalidAnswer("widget options are malformed")
     return values
 
 
-def _check_field(name: str, spec: dict, value: Any) -> None:
+def _check_field(name: str, spec: Any, value: Any) -> None:
+    if not isinstance(spec, dict):
+        raise InvalidAnswer(f"field {name!r} has a malformed schema")
     enum = spec.get("enum")
     if enum is not None:
+        if not isinstance(enum, list):
+            raise InvalidAnswer(f"field {name!r} has a malformed enum")
         if not isinstance(value, str) or value not in enum:
             raise InvalidAnswer(f"field {name!r} must be one of {enum}")
         return
@@ -197,7 +206,11 @@ def _check_field(name: str, spec: dict, value: Any) -> None:
     elif t == "integer":
         ok = isinstance(value, int) and not isinstance(value, bool)
     elif t == "number":
-        ok = isinstance(value, (int, float)) and not isinstance(value, bool)
+        ok = (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and math.isfinite(value)
+        )
     else:
         raise InvalidAnswer(f"field {name!r} has unsupported type {t!r}")
     if not ok:
@@ -205,9 +218,11 @@ def _check_field(name: str, spec: dict, value: Any) -> None:
 
 
 def validate_answer(tool_name: str, args: dict, answer: Any) -> None:
-    """Raise InvalidAnswer unless `answer` is a valid result for the widget call."""
+    """Raise InvalidAnswer (and only InvalidAnswer) unless `answer` is valid for the call."""
     if not isinstance(answer, dict):
         raise InvalidAnswer("answer must be an object")
+    if not isinstance(args, dict):
+        raise InvalidAnswer("widget arguments are malformed")
     if tool_name == CONFIRM_TOOL:
         if not isinstance(answer.get("confirmed"), bool):
             raise InvalidAnswer("confirm answer needs boolean 'confirmed'")
@@ -217,6 +232,10 @@ def validate_answer(tool_name: str, args: dict, answer: Any) -> None:
             values = answer.get("values")
             if not isinstance(values, list) or not all(isinstance(v, str) for v in values):
                 raise InvalidAnswer("select answer needs a list 'values'")
+            if len(values) != len(set(values)):
+                raise InvalidAnswer("duplicate selections")
+            if len(values) > len(set(allowed)):
+                raise InvalidAnswer("too many selections")
             bad = [v for v in values if v not in allowed]
             if bad:
                 raise InvalidAnswer(f"unknown option(s): {bad}")
@@ -230,9 +249,16 @@ def validate_answer(tool_name: str, args: dict, answer: Any) -> None:
         values = answer.get("values")
         if not isinstance(values, dict):
             raise InvalidAnswer("form answer needs object 'values'")
-        schema = args.get("schema") or {}
+        schema = args.get("schema")
+        if not isinstance(schema, dict):
+            raise InvalidAnswer("form schema is malformed")
         props = schema.get("properties") or {}
-        for name in schema.get("required") or []:
+        required = schema.get("required") or []
+        if not isinstance(props, dict) or not isinstance(required, list):
+            raise InvalidAnswer("form schema is malformed")
+        for name in required:
+            if not isinstance(name, str):
+                raise InvalidAnswer("form schema is malformed")
             if name not in values or values[name] is None:
                 raise InvalidAnswer(f"missing required field {name!r}")
         for name, value in values.items():

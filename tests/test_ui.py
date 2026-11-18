@@ -101,3 +101,42 @@ def test_ctx_answer_none_for_non_widget_tool():
         ToolMessage(id="t1", content="{}", tool_call_id="c1"),
     ]
     assert _ctx(msgs).answer is None
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+@pytest.mark.parametrize("ftype", ["number", "integer"])
+def test_form_rejects_non_finite(ftype, bad):
+    args = Form("f", {"type": "object", "properties": {"n": {"type": ftype}}}).args()
+    with pytest.raises(InvalidAnswer):
+        validate_answer("loquent_form", args, {"values": {"n": bad}})
+
+
+def test_multi_select_duplicates_rejected_empty_accepted():
+    args = Select("p", ["a", "b"], multiple=True).args()
+    validate_answer("loquent_select", args, {"values": []})
+    with pytest.raises(InvalidAnswer):
+        validate_answer("loquent_select", args, {"values": ["a", "a"]})
+    with pytest.raises(InvalidAnswer):
+        validate_answer("loquent_select", args, {"values": ["a", "b", "a"]})
+
+
+@pytest.mark.parametrize(
+    "tool,args,answer",
+    [
+        ("loquent_select", None, {"value": "a"}),
+        ("loquent_select", {"options": 5}, {"value": "a"}),
+        ("loquent_select", {"options": [1, None]}, {"value": "a"}),
+        ("loquent_select", {"options": ["a"], "multiple": True}, {"values": [["a"]]}),
+        ("loquent_form", [], {"values": {}}),
+        ("loquent_form", {"schema": 3}, {"values": {}}),
+        ("loquent_form", {"schema": {"properties": [1]}}, {"values": {}}),
+        ("loquent_form", {"schema": {"properties": {"a": 1}}}, {"values": {"a": "x"}}),
+        ("loquent_form", {"schema": {"properties": {}, "required": "a"}}, {"values": {}}),
+        ("loquent_form", {"schema": {"properties": {}, "required": [["a"]]}}, {"values": {}}),
+        ("loquent_form", {"schema": {"properties": {"a": {"enum": 3}}}}, {"values": {"a": "x"}}),
+        ("loquent_confirm", "junk", {"confirmed": True}),
+    ],
+)
+def test_malformed_args_raise_only_invalid_answer(tool, args, answer):
+    with pytest.raises(InvalidAnswer):
+        validate_answer(tool, args, answer)
