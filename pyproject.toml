@@ -11,8 +11,21 @@ dependencies = [
     "aiosqlite",
 ]
 
+[project.optional-dependencies]
+mongo = [
+    "pymongo>=4.9",
+]
+
 [dependency-groups]
-dev = ["pytest", "pytest-asyncio", "ruff", "httpx", "fastapi"]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+    "httpx",
+    "fastapi",
+    "pymongo-inmemory>=0.5.0",
+    "pymongo>=4.9,<4.10",  # pymongo-inmemory ships mongod <=4.0; newer pymongo needs >=4.4
+]
 
 [build-system]
 requires = ["hatchling"]
