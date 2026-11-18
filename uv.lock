@@ -170,6 +170,7 @@ source = { editable = "." }
 dependencies = [
     { name = "ag-ui-protocol" },
     { name = "aiosqlite" },
+    { name = "httpx" },
     { name = "pydantic" },
     { name = "starlette" },
     { name = "uvicorn" },
@@ -183,7 +184,6 @@ mongo = [
 [package.dev-dependencies]
 dev = [
     { name = "fastapi" },
-    { name = "httpx" },
     { name = "pymongo" },
     { name = "pymongo-inmemory" },
     { name = "pytest" },
@@ -195,6 +195,7 @@ dev = [
 requires-dist = [
     { name = "ag-ui-protocol" },
     { name = "aiosqlite" },
+    { name = "httpx" },
     { name = "pydantic", specifier = ">=2" },
     { name = "pymongo", marker = "extra == 'mongo'", specifier = ">=4.9" },
     { name = "starlette" },
@@ -205,7 +206,6 @@ provides-extras = ["mongo"]
 [package.metadata.requires-dev]
 dev = [
     { name = "fastapi" },
-    { name = "httpx" },
     { name = "pymongo", specifier = ">=4.9,<4.10" },
     { name = "pymongo-inmemory", specifier = ">=0.5.0" },
     { name = "pytest" },

@@ -9,6 +9,7 @@ dependencies = [
     "uvicorn",
     "pydantic>=2",
     "aiosqlite",
+    "httpx",
 ]
 
 [project.optional-dependencies]
@@ -21,7 +22,6 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "ruff",
-    "httpx",
     "fastapi",
     "pymongo-inmemory>=0.5.0",
     "pymongo>=4.9,<4.10",  # pymongo-inmemory ships mongod <=4.0; newer pymongo needs >=4.4
