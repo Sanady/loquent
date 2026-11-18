@@ -1,0 +1,9 @@
+src/loquent/server/static/
+node_modules/
+*.db
+loquent-files/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+dist/

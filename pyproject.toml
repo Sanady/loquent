@@ -1,0 +1,29 @@
+[project]
+name = "loquent"
+version = "0.1.0"
+description = "Serve a chat UI over AG-UI, the open agent-to-UI protocol."
+requires-python = ">=3.11"
+dependencies = [
+    "ag-ui-protocol",
+    "fastapi",
+    "uvicorn",
+    "pydantic>=2",
+]
+
+[dependency-groups]
+dev = ["pytest", "pytest-asyncio", "ruff", "httpx"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/loquent"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
