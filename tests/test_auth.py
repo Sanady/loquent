@@ -80,6 +80,10 @@ def test_session_tamper_and_expiry_rejected(monkeypatch):
         ("0.0.0.0", "none", True, False),
         ("0.0.0.0", "password", False, False),
         ("127.0.0.1", "password", False, False),
+        ("LOCALHOST", "none", False, False),
+        ("[::1]", "none", False, False),
+        ("::", "none", False, True),
+        ("127.0.0.2", "none", False, True),
     ],
 )
 def test_bind_safety_matrix(host, auth, flag, raises):
@@ -125,3 +129,38 @@ async def test_password_auth_current_user():
     assert await a.current_user(make_request("garbage"), store) is None
     gone, _ = sm.issue("deleted")
     assert await a.current_user(make_request(gone), store) is None
+
+
+def test_empty_secret_key_treated_as_missing(caplog):
+    with pytest.raises(InsecureConfigError):
+        check_bind_safety(Settings(auth="password", secret_key=""))
+    s = Settings(secret_key="")
+    assert len(s.effective_secret()) >= 32
+
+
+def test_insecure_override_logs_warning(caplog):
+    with caplog.at_level("WARNING", logger="loquent.auth"):
+        check_bind_safety(Settings(host="0.0.0.0", insecure_no_auth=True, secret_key="k"))
+    assert any("insecure_no_auth" in r.message for r in caplog.records)
+
+
+async def test_no_auth_concurrent_first_requests():
+    import asyncio
+
+    class RacyStore(FakeStore):
+        async def get_user_by_username(self, username):
+            r = await super().get_user_by_username(username)
+            await asyncio.sleep(0)
+            return r
+
+        async def create_user(self, username, password_hash):
+            if await FakeStore.get_user_by_username(self, username):
+                raise ValueError("duplicate")
+            return await super().create_user(username, password_hash)
+
+    store = RacyStore()
+    a = NoAuth()
+    u1, u2 = await asyncio.gather(
+        a.current_user(make_request(), store), a.current_user(make_request(), store)
+    )
+    assert u1.username == "local" and u1.id == u2.id

@@ -77,7 +77,13 @@ class NoAuth:
     async def current_user(self, request: Request, store: Store) -> User | None:
         user = await store.get_user_by_username(LOCAL_USERNAME)
         if user is None:
-            user = await store.create_user(LOCAL_USERNAME, UNUSABLE_HASH)
+            try:
+                user = await store.create_user(LOCAL_USERNAME, UNUSABLE_HASH)
+            except ValueError:
+                # lost a first-request race; the other request created it
+                user = await store.get_user_by_username(LOCAL_USERNAME)
+                if user is None:
+                    raise
         return user
 
 
@@ -98,14 +104,22 @@ class PasswordAuth:
 
 
 def check_bind_safety(settings: Settings) -> None:
+    has_key = bool(settings.secret_key and settings.secret_key.get_secret_value())
     if settings.auth == "password":
-        if settings.secret_key is None:
+        if not has_key:
             raise InsecureConfigError("auth='password' requires LOQUENT_SECRET_KEY to be set")
         return
-    if settings.host not in LOCALHOSTS and not settings.insecure_no_auth:
-        raise InsecureConfigError(
-            f"Refusing to bind {settings.host!r} with auth='none'. Use auth='password' "
-            "or set insecure_no_auth=True to override."
+    host = settings.host.strip().lower().strip("[]")
+    if host not in LOCALHOSTS:
+        if not settings.insecure_no_auth:
+            raise InsecureConfigError(
+                f"Refusing to bind {settings.host!r} with auth='none'. Use auth='password' "
+                "or set insecure_no_auth=True to override."
+            )
+        log.warning(
+            "insecure_no_auth=True: serving %r with NO authentication; anyone who can "
+            "reach this host has full access",
+            settings.host,
         )
-    if settings.secret_key is None:
+    if not has_key:
         log.warning("No secret_key set; using a random per-process key (sessions reset on restart)")

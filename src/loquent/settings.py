@@ -61,7 +61,7 @@ class Settings(BaseSettings):
 
     def effective_secret(self) -> str:
         """The configured secret key, or one random key per Settings instance."""
-        if self.secret_key is not None:
+        if self.secret_key is not None and self.secret_key.get_secret_value():
             return self.secret_key.get_secret_value()
         if self._random_key is None:
             self._random_key = secrets.token_urlsafe(32)
