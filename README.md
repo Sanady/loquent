@@ -94,9 +94,14 @@ api.mount("/chat", chat)
 
 The UI is then served at `/chat/`. The mount prefix is picked up automatically. `App`
 accepts every [setting](#settings) as a keyword argument. Without the `lifespan` hook the
-store still opens lazily on the first request; the hook adds a clean shutdown. The bind
-safety check described under [Security defaults](#security-defaults) is done by
-`loquent.serve` and `loquent serve`. When you run your own server, you own the bind address.
+store still opens lazily on the first request; the hook adds a clean shutdown.
+
+`loquent.serve` and `loquent serve` refuse to bind a public address with `auth=none`. When
+you run `App` under your own server (uvicorn, gunicorn), `App` still protects itself: with
+`auth=none` it answers `403 {"error": "forbidden"}` to every API request from a client that
+is not on loopback (`127.0.0.0/8`, `::1`), unless you set `insecure_no_auth=True`. With
+`auth="password"`, `App(...)` raises `InsecureConfigError` unless `secret_key` is set, so
+every worker signs sessions with the same key.
 
 ## Interactive widgets
 
@@ -104,6 +109,12 @@ Loquent declares three frontend tools on every run: `loquent_confirm`, `loquent_
 `loquent_form`. Any agent that supports AG-UI frontend tools, an OpenAI-compatible model
 included, can call them like ordinary tools. Plain functions get a shortcut: yield
 `ui.ask(...)`.
+
+Some backends reject tools outright (Ollama models without tool support, vLLM without auto
+tool choice). Turn the widget tools off with `--no-widgets` (`LOQUENT_WIDGETS=false`,
+`widgets=False`): no tools are sent and the UI is told widgets are off. Even with widgets
+on, if an OpenAI-compatible endpoint answers HTTP 400 to a request that carried tools, the
+adapter retries it once without tools and logs a warning on the `loquent.adapters` logger.
 
 ```python
 from loquent import ui
@@ -135,9 +146,12 @@ The widgets:
 | `Select(message, options, multiple=False, key=None)` | `Select("Which plan?", ["basic", ("pro", "Pro plan")], key="plan")` | `{"value": "pro"}`, or `{"values": [...]}` with `multiple=True` |
 | `Form(message, schema, key=None)` | `Form("Shipping address", {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}, key="addr")` | `{"values": {"city": "Lisbon"}}` |
 
-`Select` takes 1 to 20 options; each is a string or a `(value, label)` pair. A `Form` schema
-is a flat JSON Schema object whose fields are `string`, `number`, `integer`, `boolean`, or a
-string `enum`. Loquent validates every answer against its widget before your agent sees it.
+`Select` takes 1 to 20 options; each is a string or a `(value, label)` pair, and values must
+be unique. A `Form` schema is a flat JSON Schema object whose fields are `string`, `number`,
+`integer`, `boolean`, or a non-empty `enum` of strings, and every name in `required` must be
+one of its `properties`. Both raise `ValueError` when constructed with anything else, since
+the UI couldn't display it. Loquent validates every answer against its widget before your
+agent sees it.
 
 How the round trip works:
 
@@ -159,7 +173,8 @@ effects behind the `ctx.answer` check, as the example does.
 The optional second parameter, `ctx`, also carries:
 
 - `ctx.thread_id` and `ctx.run_id`
-- `ctx.user`: the signed-in user, in password mode
+- `ctx.user`: the user, as a `PublicUser` with `.id` and `.username` (never the password
+  hash). With `auth=none` it is the single local user.
 - `ctx.files`: attachments on the latest message, each with `name`, `content_type`, `size`
   and an async `read()`
 - `ctx.forwarded_props`: `{"user": ..., "headers": ..., "query": ...}`. `query` is the page's
@@ -183,8 +198,8 @@ You can also pass the URL with `--store URL`, or as `store_url=` in Python.
 
 ## Sign-in
 
-By default there is no sign-in, which is allowed only on localhost. To require a username
-and password:
+By default there is no sign-in, which is allowed only on localhost: Loquent binds only to
+localhost and serves only loopback clients. To require a username and password:
 
 ```bash
 export LOQUENT_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
@@ -196,10 +211,18 @@ loquent serve app.py:agent --auth password
 against the same store as the server. Password mode refuses to start without
 `LOQUENT_SECRET_KEY`, which signs the session cookies. Passwords are hashed with Argon2.
 
+The session cookie is `SameSite=Lax`, so browsers don't send it to a Loquent embedded in an
+iframe on another site. In release 1, password sign-in therefore doesn't work for
+cross-site embeds; embed it on the same site, or put your own sign-in in front of it (see
+[Extending Loquent](#extending-loquent)).
+
 ## Security defaults
 
 - **No accidental public servers.** With `auth=none`, Loquent refuses to bind to anything
-  but localhost unless you pass `--insecure-no-auth` (`insecure_no_auth=True`).
+  but localhost, and answers `403 forbidden` to API requests from any client that is not on
+  loopback (`127.0.0.0/8`, `::1`), unless you pass `--insecure-no-auth`
+  (`insecure_no_auth=True`). Behind a trusted proxy the client is the forwarded address, so
+  a public visitor reaching a no-auth Loquent through a proxy is refused too.
 - **API keys stay on the server.** Backend URLs and keys are never sent to the browser.
 - **Signed file URLs.** Uploads are never public. The UI fetches them through signed URLs
   that expire after 5 minutes.
@@ -224,13 +247,16 @@ stream, and a client that reconnects, even to another replica, replays them and 
 the run to the end. To run several replicas:
 
 - use a shared store (MongoDB); SQLite is a single-process file
-- set the **same** `LOQUENT_SECRET_KEY` on every replica. Without it each process signs
-  sessions and file URLs with its own random key, so they fail on the other replicas.
+- set the **same** `LOQUENT_SECRET_KEY` on every replica (and every worker, e.g. with
+  `gunicorn -w N`). Without it each process signs sessions and file URLs with its own random
+  key, so they fail on the other processes.
 - point `LOQUENT_FILES_DIR` at storage every replica can read, such as a shared volume
 
 Also:
 
-- **Health check:** `GET /healthz` returns `{"status": "ok"}`.
+- **Health check:** `GET /healthz` returns `{"status": "ok"}`, or `503` when the store is
+  unreachable. It lives under `root_path` (and under the mount prefix): with
+  `--root-path /chat` it is `GET /chat/healthz`.
 - **Sub-path hosting:** set `--root-path /chat` (`LOQUENT_ROOT_PATH`) to serve the app
   under a prefix, for example behind a proxy that forwards `/chat/` unchanged. When you
   mount `App` in FastAPI or Starlette, the mount prefix is picked up automatically.
@@ -291,23 +317,124 @@ environment variables are JSON, for example `LOQUENT_CORS_ORIGINS='["https://app
 | `store_url` | `LOQUENT_STORE_URL` | `--store` | `sqlite:///./loquent.db` | `sqlite:///path.db` or `mongodb://…` (needs `loquent[mongo]`). |
 | `files_dir` | `LOQUENT_FILES_DIR` |  | `./loquent-files` | Directory for uploaded files. |
 | `auth` | `LOQUENT_AUTH` | `--auth` | `none` | `none` or `password`. |
-| `insecure_no_auth` | `LOQUENT_INSECURE_NO_AUTH` | `--insecure-no-auth` | `false` | Allow `auth=none` on a non-localhost bind. |
-| `secret_key` | `LOQUENT_SECRET_KEY` |  | unset | Signs sessions and file URLs. Required for `auth=password` and for multiple replicas. Unset: a random key per process. |
+| `insecure_no_auth` | `LOQUENT_INSECURE_NO_AUTH` | `--insecure-no-auth` | `false` | Allow `auth=none` on a non-localhost bind, and serve non-loopback clients. |
+| `secret_key` | `LOQUENT_SECRET_KEY` |  | unset | Signs sessions and file URLs. Required for `auth=password` (also by `App`) and for multiple workers or replicas. Unset: a random key per process. |
 | `cors_origins` | `LOQUENT_CORS_ORIGINS` |  | `[]` | Origins allowed to call the API cross-origin (with credentials). |
 | `frame_ancestors` | `LOQUENT_FRAME_ANCESTORS` |  | `[]` | CSP `frame-ancestors` sources allowed to embed the UI in an iframe. Empty: `'none'`. |
 | `max_upload_mb` | `LOQUENT_MAX_UPLOAD_MB` |  | `20` | Largest accepted upload, in MB. |
-| `allowed_upload_types` | `LOQUENT_ALLOWED_UPLOAD_TYPES` |  | see below | Accepted upload content types. |
+| `allowed_upload_types` | `LOQUENT_ALLOWED_UPLOAD_TYPES` |  | see below | Accepted upload content types. The UI refuses other files before uploading. |
 | `app_name` | `LOQUENT_APP_NAME` |  | `Chat` | Name shown in the header and the browser tab. |
 | `logo_path` | `LOQUENT_LOGO_PATH` |  | unset | Image file shown as the logo. |
 | `theme` | `LOQUENT_THEME` |  | `{}` | Design tokens; see [Theming and branding](#theming-and-branding). |
 | `custom_css_path` | `LOQUENT_CUSTOM_CSS_PATH` |  | unset | Stylesheet loaded after the built-in styles. |
 | `hide` | `LOQUENT_HIDE` |  | `[]` | UI parts to hide. Supported: `thread_list`. |
 | `forward_headers` | `LOQUENT_FORWARD_HEADERS` |  | `[]` | Request headers passed to the agent in `ctx.forwarded_props["headers"]`. `Cookie`, `Authorization` and `X-Loquent-CSRF` are never forwarded. |
+| `widgets` | `LOQUENT_WIDGETS` | `--no-widgets` | `true` | Offer the widget tools to the agent. Turn off for backends that reject tools. |
 | `model` | `LOQUENT_MODEL` | `--model` | unset | With a URL target: the model name, which selects the OpenAI-compatible adapter. |
 | `api_key` | `LOQUENT_API_KEY` | `--api-key-env NAME` | unset | API key sent to an OpenAI-compatible backend. Never reaches the browser. |
 
 The default `allowed_upload_types` are `image/png`, `image/jpeg`, `image/gif`, `image/webp`,
 `application/pdf`, `text/plain`, `text/markdown`, `text/csv` and `application/json`.
+
+## Extending Loquent
+
+### A custom adapter
+
+Anything with a `run(input, ctx)` async generator and two flags is an adapter; pass it to
+`loquent.serve` or `App` like a function or URL. `run` yields AG-UI *content* events (text
+messages, tool calls, steps, custom events). Loquent emits `RUN_STARTED`, `RUN_FINISHED` and
+`RUN_ERROR` itself and drops any your adapter yields. Raise `AgentError` to end the run with
+a message the user sees as is; any other exception shows a generic error and is logged.
+
+```python
+from uuid import uuid4
+
+from ag_ui.core import TextMessageContentEvent, TextMessageEndEvent, TextMessageStartEvent
+
+import loquent
+from loquent import AgentError, RunContext
+
+
+class ShoutAdapter:
+    supports_widgets = False      # no widget tools are offered to this backend
+    supports_attachments = False  # messages with files are refused
+
+    async def run(self, input, ctx: RunContext):
+        text = ctx.messages[-1].content if ctx.messages else ""
+        if len(text) > 500:
+            raise AgentError("That is too long to shout.")  # shown to the user as is
+        mid = str(uuid4())
+        yield TextMessageStartEvent(message_id=mid, role="assistant")
+        yield TextMessageContentEvent(message_id=mid, delta=text.upper())
+        yield TextMessageEndEvent(message_id=mid)
+
+
+loquent.serve(ShoutAdapter())
+```
+
+`input` is the AG-UI `RunAgentInput` (with `tools` holding the widget tools when
+`supports_widgets` is true), and `ctx` is the [run context](#the-run-context). A
+`loquent_*` tool call (`TOOL_CALL_START`/`ARGS`/`END`) shows that widget and ends the run.
+
+### Your own store, file store, sign-in and rate limit
+
+`App` also takes the layers underneath as keyword arguments:
+
+```python
+import time
+from collections import defaultdict
+
+from loquent import App
+from loquent.auth import UNUSABLE_HASH
+from loquent.files import LocalFileStore
+from loquent.store.sqlite import SqliteStore
+
+
+class ProxyUserAuth:
+    """Trust the user name a reverse proxy sets. Only safe if the proxy is the sole way in."""
+
+    mode = "proxy"  # anything but "password": no login form, CSRF by header presence
+
+    async def current_user(self, request, store):
+        name = request.headers.get("x-forwarded-user")
+        if not name:
+            return None  # answered 401
+        user = await store.get_user_by_username(name)
+        return user or await store.create_user(name, UNUSABLE_HASH)
+
+
+_recent: dict[str, list[float]] = defaultdict(list)
+
+
+async def ten_per_minute(request, user) -> bool:
+    """At most 10 runs or uploads per user per minute (in this process)."""
+    now = time.monotonic()
+    _recent[user.id] = [t for t in _recent[user.id] if now - t < 60] + [now]
+    return len(_recent[user.id]) <= 10
+
+
+app = App(
+    agent,
+    store=SqliteStore("/var/lib/chat/chat.db"),
+    file_store=LocalFileStore("/var/lib/chat/files"),
+    authenticator=ProxyUserAuth(),
+    rate_limiter=ten_per_minute,
+)
+```
+
+- **`store=`**: any object implementing `loquent.store.Store` (users, threads, runs, events
+  and file metadata). The built-in ones are `SqliteStore(path)` and
+  `loquent.store.mongo.MongoStore(url, db_name="loquent")`. Without it, `store_url` decides.
+- **`file_store=`**: any object with async `save(file_id, chunks, max_bytes) -> int`,
+  `read(file_id) -> bytes` and `delete(file_id)` (`loquent.files.FileStore`). The default is
+  `LocalFileStore(files_dir)`.
+- **`authenticator=`**: an object with a `mode` string and
+  `async current_user(request, store) -> User | None` (`loquent.auth.Authenticator`); `None`
+  is answered `401`. The mode `"password"` is reserved for the built-in sign-in. The
+  loopback-only rule of `auth=none` does not apply to your authenticator, and file URLs are
+  still signed with `secret_key`.
+- **`rate_limiter=`**: `async (request, user) -> bool`, called before every run start and
+  upload; `False` is answered `429 {"error": "rate_limited"}`.
 
 ## Known limitations in v1
 

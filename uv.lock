@@ -368,17 +368,17 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "ag-ui-protocol" },
+    { name = "ag-ui-protocol", specifier = ">=1.0,<2" },
     { name = "aiosqlite" },
     { name = "argon2-cffi", specifier = ">=25.1.0" },
-    { name = "httpx" },
+    { name = "httpx", specifier = ">=0.28" },
     { name = "itsdangerous", specifier = ">=2.2.0" },
     { name = "pydantic", specifier = ">=2" },
-    { name = "pydantic-settings", specifier = ">=2.16.3" },
+    { name = "pydantic-settings", specifier = ">=2.16" },
     { name = "pymongo", marker = "extra == 'mongo'", specifier = ">=4.9" },
     { name = "python-multipart", specifier = ">=0.0.34" },
-    { name = "starlette" },
-    { name = "uvicorn" },
+    { name = "starlette", specifier = ">=1.10" },
+    { name = "uvicorn", specifier = ">=0.54" },
 ]
 provides-extras = ["mongo"]
 
