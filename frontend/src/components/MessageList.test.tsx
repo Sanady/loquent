@@ -110,7 +110,7 @@ describe("MessageList", () => {
     expect(screen.queryByRole("button", { name: /retry/i })).toBeNull();
   });
 
-  it("widget items render through the registry fallback (read-only message)", () => {
+  it("widget items render through the registry", () => {
     const items: Item[] = [
       userMsg("u1", "delete it"),
       { kind: "widget", id: "w1", widget: "confirm", args: { message: "Really delete the file?" }, argsComplete: true },
@@ -118,7 +118,7 @@ describe("MessageList", () => {
     const store = readyStore({ view: view(items, "idle") });
     const { container } = renderList(store);
     expect(screen.getByText("Really delete the file?")).toBeTruthy();
-    expect(container.querySelector(".lq-widget button, .lq-widget input")).toBeNull();
+    expect(container.querySelectorAll(".lq-widget button")).toHaveLength(2);
   });
 
   it("attachment chips show name and size and open a fresh signed URL", async () => {

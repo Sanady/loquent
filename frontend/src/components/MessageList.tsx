@@ -45,6 +45,10 @@ export function MessageList() {
   const idle = !starting && (run === "idle" || run === "cancelled");
   const regenAt = idle ? lastAssistantIndex(items) : -1;
   const last = items[items.length - 1];
+  let lastPending = -1;
+  items.forEach((it, i) => {
+    if (it.kind === "widget" && it.answer === undefined) lastPending = i;
+  });
   const showTyping =
     (running || starting) && !(last?.kind === "message" && last.role === "assistant" && last.streaming);
 
@@ -71,7 +75,7 @@ export function MessageList() {
           case "tool":
             return <ToolRow key={`t-${it.id}`} item={it} />;
           case "widget":
-            return <div key={`w-${it.id}`} className="lq-widget-slot">{renderWidget(it)}</div>;
+            return <div key={`w-${it.id}`} className="lq-widget-slot">{renderWidget(it, { interactive: i === lastPending })}</div>;
           case "error":
             return <ErrorItem key={`e-${i}`} item={it} />;
           default:

@@ -1343,3 +1343,119 @@ button.lq-chip:hover {
     font-size: 16px; /* stops iOS zooming into the field */
   }
 }
+
+/* ---------- widgets ---------- */
+
+.lq-widget-slot {
+  max-width: 560px;
+}
+.lq-widget-message {
+  margin: 0 0 10px;
+  font-weight: 500;
+  color: var(--lq-text);
+}
+.lq-widget-group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+.lq-widget-group > legend {
+  padding: 0;
+  float: left;
+  width: 100%;
+}
+.lq-widget-group > legend + * {
+  clear: both;
+}
+.lq-widget-group:disabled {
+  opacity: 0.65;
+}
+.lq-widget-option,
+.lq-widget-field.is-check label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  color: var(--lq-text);
+}
+.lq-widget-option input,
+.lq-widget-field.is-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--lq-accent);
+}
+.lq-widget-field {
+  display: grid;
+  gap: 4px;
+}
+.lq-widget-field > label {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--lq-text);
+}
+.lq-widget-field input:not([type="checkbox"]),
+.lq-widget-field select {
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--lq-border-strong);
+  border-radius: var(--lq-radius-sm);
+  background: var(--lq-background);
+  color: var(--lq-text);
+  font-size: 14.5px;
+}
+.lq-widget-field input[aria-invalid="true"],
+.lq-widget-field select[aria-invalid="true"] {
+  border-color: var(--lq-danger);
+}
+.lq-widget-req {
+  color: var(--lq-danger);
+}
+.lq-widget-error {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--lq-danger);
+}
+.lq-widget-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.lq-widget-answer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--lq-text);
+}
+.lq-widget-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: var(--lq-accent-soft);
+  color: var(--lq-text);
+}
+.lq-widget-badge.is-no {
+  background: var(--lq-danger-soft);
+}
+.lq-widget-values {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.lq-widget-values > div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.lq-widget-values dt {
+  color: var(--lq-muted);
+}
+.lq-widget-values dd {
+  margin: 0;
+  color: var(--lq-text);
+}
