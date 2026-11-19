@@ -12,6 +12,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
 from loquent.app import serve
 from loquent.auth import InsecureConfigError, hash_password
 from loquent.settings import Settings
@@ -38,10 +40,12 @@ def _load_target(target: str) -> Any:
         if spec is None or spec.loader is None:
             raise CliError(f"cannot load {path_part}")
         module = importlib.util.module_from_spec(spec)
+        sys.modules[module.__name__] = module  # dataclasses/pydantic look themselves up here
         sys.path.insert(0, str(file.resolve().parent))  # sibling imports, like `python file.py`
         try:
             spec.loader.exec_module(module)
         except Exception as e:
+            sys.modules.pop(module.__name__, None)
             raise CliError(f"error importing {path_part}: {e!r}") from e
     else:
         if "" not in sys.path and os.getcwd() not in sys.path:
@@ -51,9 +55,12 @@ def _load_target(target: str) -> Any:
         except ImportError as e:
             raise CliError(f"cannot import module {path_part!r}: {e}") from e
     try:
-        return getattr(module, attr)
+        obj = getattr(module, attr)
     except AttributeError:
         raise CliError(f"{path_part!r} has no attribute {attr!r}") from None
+    if not callable(obj) and not (isinstance(obj, str) and obj.startswith(("http://", "https://"))):
+        raise CliError(f"{target!r} is not callable (expected a function, adapter or URL)")
+    return obj
 
 
 def _cmd_serve(args: argparse.Namespace) -> int:
@@ -86,6 +93,13 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     except InsecureConfigError as e:
         hint = " Pass --insecure-no-auth to override." if "insecure_no_auth" in str(e) else ""
         raise CliError(f"{e}{hint}") from e
+    except ValidationError as e:
+        details = "; ".join(
+            f"{'.'.join(str(x) for x in err['loc'])}: {err['msg']}" for err in e.errors()
+        )
+        raise CliError(f"invalid settings: {details}") from e
+    except (TypeError, ValueError) as e:
+        raise CliError(str(e)) from e
     return 0
 
 

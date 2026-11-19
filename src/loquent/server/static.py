@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import re
 from importlib.resources import files
 from pathlib import Path
 
@@ -16,6 +17,8 @@ from loquent.settings import Settings
 
 # Module-level so tests can point it at a temp dir.
 STATIC_DIR: Path = Path(str(files("loquent.server") / "static"))
+
+_HEAD_RE = re.compile(r"<head(\s[^>]*)?>", re.IGNORECASE)
 
 MISSING_UI = "UI assets missing: build with `npm run build` in frontend/"
 
@@ -52,16 +55,19 @@ def routes(settings: Settings) -> list[Route]:
             return PlainTextResponse(MISSING_UI, status_code=503)
         page = index_file.read_text(encoding="utf-8")
         tag = f'<base href="{html.escape(base_prefix(request), quote=True)}/">'
-        if "<head>" in page:
-            page = page.replace("<head>", "<head>" + tag, 1)
-        else:
+        page, n = _HEAD_RE.subn(lambda m: m.group(0) + tag, page, count=1)
+        if not n:
             page = tag + page
         return HTMLResponse(page, headers={"Cache-Control": "no-cache"})
 
     async def asset(request: Request) -> Response:
         root = (STATIC_DIR / "assets").resolve()
-        target = (root / request.path_params["path"]).resolve()
-        if not target.is_relative_to(root) or not target.is_file():
+        try:
+            target = (root / request.path_params["path"]).resolve()
+            ok = target.is_relative_to(root) and target.is_file()
+        except (ValueError, OSError):  # e.g. a NUL byte in the path
+            ok = False
+        if not ok:
             raise HTTPException(404)
         return FileResponse(
             target, headers={"Cache-Control": "public, max-age=31536000, immutable"}

@@ -151,3 +151,46 @@ def test_cli_user_add_uses_env_store(tmp_path, monkeypatch):
     monkeypatch.setattr(getpass, "getpass", lambda prompt="": "pw-pw-pw-1")
     assert cli.main(["user", "add", "alice"]) == 0
     assert asyncio.run(_users(str(db))) is not None
+
+
+def test_cli_missing_attr_clean_error(tmp_path, capsys):
+    f = tmp_path / "a.py"
+    f.write_text(AGENT)
+    assert cli.main(["serve", f"{f}:nope"]) == 2
+    err = capsys.readouterr().err
+    assert "no attribute 'nope'" in err and "Traceback" not in err
+
+
+def test_cli_non_callable_target(tmp_path, capsys):
+    f = tmp_path / "a.py"
+    f.write_text("CONSTANT = 5\n")
+    assert cli.main(["serve", f"{f}:CONSTANT"]) == 2
+    err = capsys.readouterr().err
+    assert "not callable" in err and "Traceback" not in err
+
+
+def test_cli_invalid_setting(tmp_path, capsys):
+    f = tmp_path / "a.py"
+    f.write_text(AGENT)
+    assert cli.main(["serve", f"{f}:agent", "--port", "abc"]) == 2
+    assert cli.main(["serve", f"{f}:agent", "--auth", "password"]) == 2  # no secret key
+    err = capsys.readouterr().err
+    assert "Traceback" not in err and "loquent: error:" in err
+
+
+def test_cli_invalid_env_setting(tmp_path, monkeypatch, capsys):
+    f = tmp_path / "a.py"
+    f.write_text(AGENT)
+    monkeypatch.setenv("LOQUENT_PORT", "notanint")
+    assert cli.main(["serve", f"{f}:agent"]) == 2
+    assert "invalid settings" in capsys.readouterr().err
+
+
+def test_cli_file_target_dataclass_forward_refs(tmp_path, captured):
+    f = tmp_path / "dc.py"
+    f.write_text(
+        "from __future__ import annotations\nfrom dataclasses import dataclass\n"
+        "@dataclass\nclass C:\n    x: int = 1\n"
+        "def agent(messages):\n    return C().x\n"
+    )
+    assert cli.main(["serve", f"{f}:agent"]) == 0

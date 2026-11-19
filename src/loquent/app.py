@@ -76,7 +76,10 @@ class App:
         if settings is None:
             settings = Settings(**overrides)
         elif overrides:
-            settings = settings.model_copy(update=overrides)
+            unknown = sorted(set(overrides) - set(Settings.model_fields))
+            if unknown:
+                raise TypeError(f"unknown setting(s): {', '.join(unknown)}")
+            settings = Settings.model_validate({**settings.model_dump(), **overrides})
         self.settings = settings
         adapter = resolve_agent(
             agent,

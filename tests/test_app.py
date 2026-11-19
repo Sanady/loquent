@@ -55,7 +55,8 @@ async def test_index_injects_base_href(tmp_path, monkeypatch):
         assert r.status_code == 404 and r.json() == {"error": "not_found"}
         assert (await c.get("/branding/logo")).status_code == 404
         assert (await c.get("/branding/custom.css")).status_code == 404
-        assert (await c.get("/assets/../index.html")).status_code in (200, 404)
+        assert (await c.get("/assets/%2e%2e/index.html")).status_code == 404
+        assert (await c.get("/assets/a%00.js")).status_code == 404
 
 
 async def test_base_href_with_settings_root_path(tmp_path, monkeypatch):
@@ -138,3 +139,22 @@ def test_serve_refuses_public_bind_without_auth(monkeypatch):
     monkeypatch.setattr(uvicorn, "run", lambda *a, **k: None)
     with pytest.raises(InsecureConfigError):
         serve(echo, host="0.0.0.0")
+
+
+async def test_base_injected_after_head_with_attributes(tmp_path, monkeypatch):
+    d = fake_ui(tmp_path, monkeypatch)
+    (d / "index.html").write_text('<HTML><HEAD lang="en"><title>x</title></HEAD></HTML>')
+    app = App(echo, settings=settings(tmp_path))
+    async with app.lifespan(), client_for(app) as c:
+        assert '<HEAD lang="en"><base href="/">' in (await c.get("/")).text
+
+
+def test_unknown_override_rejected_and_validated(tmp_path):
+    import pytest
+    from pydantic import ValidationError
+
+    s = settings(tmp_path)
+    with pytest.raises(TypeError):
+        App(echo, settings=s, nonsense=1)
+    with pytest.raises(ValidationError):
+        App(echo, settings=s, port="abc")

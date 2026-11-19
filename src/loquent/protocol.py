@@ -95,7 +95,10 @@ def events_to_messages(events: Iterable[dict]) -> list[Message]:
                 call["ended"] = True
                 parent = call["parent"] or f"asst-{call['id']}"
                 assistant_slot(parent)["tool_calls"].append(
-                    ToolCall(id=call["id"], function=FunctionCall(name=call["name"], arguments=call["args"]))
+                    ToolCall(
+                        id=call["id"],
+                        function=FunctionCall(name=call["name"], arguments=call["args"]),
+                    )
                 )
         elif t == "TOOL_CALL_RESULT":
             slots.append(
@@ -110,10 +113,14 @@ def events_to_messages(events: Iterable[dict]) -> list[Message]:
     out: list[Message] = []
     for s in slots:
         if s["role"] == "tool":
-            out.append(ToolMessage(id=s["id"], content=s["content"], tool_call_id=s["tool_call_id"]))
+            out.append(
+                ToolMessage(id=s["id"], content=s["content"], tool_call_id=s["tool_call_id"])
+            )
         elif s["role"] == "assistant":
             out.append(
-                AssistantMessage(id=s["id"], content=s["content"], tool_calls=s["tool_calls"] or None)
+                AssistantMessage(
+                    id=s["id"], content=s["content"], tool_calls=s["tool_calls"] or None
+                )
             )
         else:
             out.append(_TEXT_ROLES[s["role"]](id=s["id"], content=s["content"]))
