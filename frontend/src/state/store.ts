@@ -1,0 +1,312 @@
+import { createStore, type StoreApi } from "zustand/vanilla";
+import {
+  api as defaultApi,
+  ApiError,
+  type Api,
+  type AppConfig,
+  type RunBody,
+  type RunStatus,
+  type ThreadSummary,
+  type User,
+} from "../api/client";
+import { applyEvent, applyEvents, emptyView, type AgUiEvent, type Attachment, type RunState, type ThreadView } from "./reducer";
+
+const POLL_MS = 1000;
+const DELETE_WAIT_MS = 30000;
+
+const MESSAGES: Record<string, string> = {
+  run_in_progress: "A reply is already in progress.",
+  invalid_answer: "That answer is no longer valid.",
+  invalid_input: "That request could not be processed.",
+  unauthorized: "Please sign in again.",
+  csrf: "Your session expired. Please reload the page.",
+  rate_limited: "Too many requests. Please wait a moment.",
+  unsupported_media_type: "That file type is not supported.",
+  payload_too_large: "That file is too large.",
+  not_found: "That conversation no longer exists.",
+};
+
+export function errorMessage(code: string): string {
+  return MESSAGES[code] ?? "Something went wrong. Please try again.";
+}
+
+export interface AppState {
+  config: AppConfig | null;
+  user: User | null;
+  authError: string | null;
+  threads: ThreadSummary[];
+  currentThreadId: string | null;
+  view: ThreadView;
+  notice: string | null;
+
+  init(): Promise<void>;
+  login(username: string, password: string): Promise<void>;
+  logout(): Promise<void>;
+  refreshThreads(): Promise<void>;
+  renameThread(id: string, title: string): Promise<void>;
+  deleteThread(id: string): Promise<void>;
+  openThread(id: string): Promise<void>;
+  newThread(): void;
+  send(text: string, files: (File | Attachment)[]): Promise<void>;
+  answer(toolCallId: string, value: unknown): Promise<void>;
+  regenerate(): Promise<void>;
+  stop(): Promise<void>;
+}
+
+export type AppStore = StoreApi<AppState>;
+
+const isTerminal = (s: RunStatus) => s !== "running";
+const runFromStatus = (s: RunStatus): RunState =>
+  s === "running" ? "running" : s === "interrupted" ? "interrupted" : s === "failed" ? "failed" : s === "cancelled" ? "cancelled" : "idle";
+
+function defaultPageQuery(): Record<string, string> {
+  try {
+    return Object.fromEntries(new URLSearchParams(window.location.search));
+  } catch {
+    return {};
+  }
+}
+
+export function createAppStore(
+  api: Api = defaultApi,
+  opts: { pageQuery?: () => Record<string, string> } = {},
+): AppStore {
+  const pageQuery = opts.pageQuery ?? defaultPageQuery;
+  // Bumped whenever the visible thread changes; stale consumers stop touching the view.
+  let gen = 0;
+  let abort: AbortController | null = null;
+
+  const store = createStore<AppState>()((set, get) => {
+    const setView = (fn: (v: ThreadView) => ThreadView) => set((s) => ({ view: fn(s.view) }));
+    const pushError = (message: string, code?: string) =>
+      setView((v) => ({ ...v, items: [...v.items, code ? { kind: "error", message, code } : { kind: "error", message }] }));
+
+    const fail = (e: unknown, myGen: number) => {
+      if (myGen !== gen) return;
+      if (e instanceof ApiError) {
+        if (e.status === 401) set({ user: null });
+        pushError(errorMessage(e.code), e.code);
+      } else {
+        pushError(errorMessage(""));
+      }
+    };
+
+    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+    function finalize(status: RunStatus) {
+      setView((v) => {
+        if (v.run !== "running") return v;
+        const run = runFromStatus(status);
+        if (status === "failed") return { ...v, run, items: [...v.items, { kind: "error", message: "The run failed." }] };
+        return { ...v, run };
+      });
+    }
+
+    async function poll(runId: string, myGen: number) {
+      for (;;) {
+        await sleep(POLL_MS);
+        if (myGen !== gen) return;
+        let res;
+        try {
+          res = await api.runEvents(runId, get().view.lastSeq);
+        } catch (e) {
+          if (myGen !== gen) return;
+          if (e instanceof ApiError) {
+            if (e.status === 401) set({ user: null });
+            if (e.status === 401 || e.status === 404) return;
+          }
+          continue; // transient failure: try again next tick
+        }
+        if (myGen !== gen) return;
+        setView((v) => res.events.reduce((acc, x) => applyEvent(acc, x.event, x.seq), v));
+        if (isTerminal(res.status)) {
+          finalize(res.status);
+          return;
+        }
+      }
+    }
+
+    async function consume(body: RunBody) {
+      const myGen = gen;
+      const ac = new AbortController();
+      abort = ac;
+      setView((v) => ({ ...v, lastSeq: 0, runId: undefined }));
+      let terminal = false;
+      try {
+        for await (const { seq, event } of api.startRun(body, ac.signal)) {
+          if (myGen !== gen) return;
+          setView((v) => applyEvent(v, event, seq));
+          if (event.type === "RUN_FINISHED" || event.type === "RUN_ERROR") terminal = true;
+          const tid = (event as { threadId?: string }).threadId;
+          if (event.type === "RUN_STARTED" && tid && get().currentThreadId === null) set({ currentThreadId: tid });
+        }
+      } catch (e) {
+        if (myGen !== gen) return;
+        if (e instanceof ApiError) return fail(e, myGen);
+        // anything else is a dropped connection: fall through to polling
+      }
+      if (myGen !== gen) return;
+      if (!terminal) {
+        const runId = get().view.runId;
+        if (runId) await poll(runId, myGen);
+        else pushError("Connection lost. Please try again.");
+      }
+      if (myGen === gen) await get().refreshThreads();
+    }
+
+    async function run(input: RunBody["input"]) {
+      await consume({ thread_id: get().currentThreadId, input, page_query: pageQuery() });
+    }
+
+    function waitNotRunning(): Promise<void> {
+      return new Promise((resolve) => {
+        if (get().view.run !== "running") return resolve();
+        const timer = setTimeout(done, DELETE_WAIT_MS);
+        const unsub = store.subscribe((s) => {
+          if (s.view.run !== "running") done();
+        });
+        function done() {
+          clearTimeout(timer);
+          unsub();
+          resolve();
+        }
+      });
+    }
+
+    return {
+      config: null,
+      user: null,
+      authError: null,
+      threads: [],
+      currentThreadId: null,
+      view: emptyView(),
+      notice: null,
+
+      async init() {
+        try {
+          const config = await api.config();
+          set({ config });
+          const me = await api.me();
+          set({ user: me.user });
+          await get().refreshThreads();
+        } catch (e) {
+          if (e instanceof ApiError && e.status === 401) set({ user: null });
+        }
+      },
+
+      async login(username, password) {
+        try {
+          const r = await api.login(username, password);
+          set({ user: r.user, authError: null });
+          await get().refreshThreads();
+        } catch (e) {
+          set({ authError: e instanceof ApiError && e.status === 401 ? "Invalid username or password." : errorMessage(e instanceof ApiError ? e.code : "") });
+        }
+      },
+
+      async logout() {
+        try {
+          await api.logout();
+        } catch {
+          /* session is gone either way */
+        }
+        gen++;
+        abort?.abort();
+        set({ user: null, threads: [], currentThreadId: null, view: emptyView() });
+      },
+
+      async refreshThreads() {
+        try {
+          set({ threads: await api.threads() });
+        } catch (e) {
+          if (e instanceof ApiError && e.status === 401) set({ user: null });
+        }
+      },
+
+      async renameThread(id, title) {
+        try {
+          await api.renameThread(id, title);
+          await get().refreshThreads();
+        } catch (e) {
+          set({ notice: e instanceof ApiError ? errorMessage(e.code) : errorMessage("") });
+        }
+      },
+
+      async deleteThread(id) {
+        const isCurrent = get().currentThreadId === id;
+        if (isCurrent && get().view.run === "running") {
+          await get().stop();
+          await waitNotRunning();
+        }
+        try {
+          await api.deleteThread(id);
+        } catch (e) {
+          const code = e instanceof ApiError ? e.code : "";
+          if (e instanceof ApiError && e.status === 401) set({ user: null });
+          if (get().currentThreadId === id) pushError(errorMessage(code), code || undefined);
+          else set({ notice: errorMessage(code) });
+          return;
+        }
+        if (get().currentThreadId === id) get().newThread();
+        await get().refreshThreads();
+      },
+
+      async openThread(id) {
+        const myGen = ++gen;
+        abort?.abort();
+        set({ currentThreadId: id, view: emptyView() });
+        let detail;
+        try {
+          detail = await api.thread(id);
+        } catch (e) {
+          fail(e, myGen);
+          return;
+        }
+        if (myGen !== gen) return;
+        let view = applyEvents(emptyView(), detail.events);
+        const lr = detail.last_run;
+        if (lr) view = { ...view, runId: lr.id, lastSeq: lr.last_seq, run: runFromStatus(lr.status) };
+        set({ view });
+        if (lr?.status === "running") {
+          // Detached: opening a thread must not block on the run finishing.
+          void poll(lr.id, myGen).then(() => (myGen === gen ? get().refreshThreads() : undefined));
+        }
+      },
+
+      newThread() {
+        gen++;
+        abort?.abort();
+        set({ currentThreadId: null, view: emptyView() });
+      },
+
+      async send(text, files) {
+        let ids: string[];
+        try {
+          ids = await Promise.all(files.map(async (f) => (f instanceof File ? (await api.upload(f)).id : f.id)));
+        } catch (e) {
+          fail(e, gen);
+          return;
+        }
+        await run({ type: "message", content: text, attachments: ids });
+      },
+
+      answer: (toolCallId, value) => run({ type: "tool_result", tool_call_id: toolCallId, answer: value }),
+      regenerate: () => run({ type: "regenerate" }),
+
+      async stop() {
+        const { runId, run: state } = get().view;
+        if (!runId || state !== "running") return;
+        try {
+          await api.cancel(runId); // keep consuming: the terminal event arrives via stream or polling
+        } catch (e) {
+          fail(e, gen);
+        }
+      },
+    };
+  });
+  return store;
+}
+
+export const appStore = createAppStore();
+
+export type { AgUiEvent };

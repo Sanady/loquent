@@ -79,6 +79,7 @@ export function applyEvent(v: ThreadView, e: AgUiEvent, seq?: number): ThreadVie
         items: [...items, { kind: "error", message: ev.message, code: ev.code }],
       };
     case "TEXT_MESSAGE_START": {
+      if (items.some((x) => x.kind === "message" && x.id === ev.messageId)) return base;
       const attachments: Attachment[] = Array.isArray(ev.metadata?.attachments) ? ev.metadata.attachments : [];
       const item: Item = {
         kind: "message",
@@ -108,6 +109,7 @@ export function applyEvent(v: ThreadView, e: AgUiEvent, seq?: number): ThreadVie
       return { ...base, items: mapItem(items, i, (x) => (x.kind === "step" ? { ...x, status: "done" } : x)) };
     }
     case "TOOL_CALL_START": {
+      if (items.some((x) => (x.kind === "tool" || x.kind === "widget") && x.id === ev.toolCallId)) return base;
       const widget = WIDGETS[ev.toolCallName];
       const item: Item = widget
         ? { kind: "widget", id: ev.toolCallId, widget, args: "", argsComplete: false }

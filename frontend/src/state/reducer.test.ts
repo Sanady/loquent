@@ -134,4 +134,26 @@ describe("reducer", () => {
     expect(frozen.items[0]).toMatchObject({ text: "", streaming: true });
     expect(frozen.items[1]).toMatchObject({ args: "" });
   });
+
+  it("TEXT_MESSAGE_START is a no-op when a message with the same id exists", () => {
+    const v = applyEvents(emptyView(), [
+      { type: "TEXT_MESSAGE_START", messageId: "m" },
+      { type: "TEXT_MESSAGE_CONTENT", messageId: "m", delta: "hi" },
+    ]);
+    const out = applyEvent(v, { type: "TEXT_MESSAGE_START", messageId: "m" });
+    expect(out.items).toHaveLength(1);
+    expect(out.items[0]).toMatchObject({ text: "hi" });
+  });
+
+  it("TOOL_CALL_START is a no-op when a tool or widget with the same id exists", () => {
+    const v = applyEvents(emptyView(), [
+      { type: "TOOL_CALL_START", toolCallId: "c", toolCallName: "t" },
+      { type: "TOOL_CALL_START", toolCallId: "w", toolCallName: "loquent_confirm" },
+    ]);
+    const out = applyEvents(v, [
+      { type: "TOOL_CALL_START", toolCallId: "c", toolCallName: "t" },
+      { type: "TOOL_CALL_START", toolCallId: "w", toolCallName: "loquent_confirm" },
+    ]);
+    expect(out.items).toHaveLength(2);
+  });
 });
