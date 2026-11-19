@@ -14,7 +14,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from loquent.app import serve
+from loquent.app import prepare, run
 from loquent.auth import InsecureConfigError, hash_password
 from loquent.settings import Settings
 from loquent.store.factory import open_store
@@ -36,7 +36,10 @@ def _load_target(target: str) -> Any:
         file = Path(path_part)
         if not file.is_file():
             raise CliError(f"target file not found: {path_part}")
-        spec = importlib.util.spec_from_file_location(file.stem, file)
+        name = file.stem
+        if name in sys.modules:  # never clobber an existing module
+            name = f"_loquent_target_{file.stem}_{id(file)}"
+        spec = importlib.util.spec_from_file_location(name, file)
         if spec is None or spec.loader is None:
             raise CliError(f"cannot load {path_part}")
         module = importlib.util.module_from_spec(spec)
@@ -89,7 +92,7 @@ def _cmd_serve(args: argparse.Namespace) -> int:
             p.strip() for p in args.forwarded_allow_ips.split(",") if p.strip()
         ]
     try:
-        serve(agent, **overrides)
+        app, settings = prepare(agent, **overrides)
     except InsecureConfigError as e:
         hint = " Pass --insecure-no-auth to override." if "insecure_no_auth" in str(e) else ""
         raise CliError(f"{e}{hint}") from e
@@ -100,6 +103,7 @@ def _cmd_serve(args: argparse.Namespace) -> int:
         raise CliError(f"invalid settings: {details}") from e
     except (TypeError, ValueError) as e:
         raise CliError(str(e)) from e
+    run(app, settings)  # outside the try: runtime errors keep their traceback
     return 0
 
 

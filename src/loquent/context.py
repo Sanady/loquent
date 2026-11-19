@@ -59,7 +59,5 @@ class RunContext:
                         return None
                     args = _loads(call.function.arguments)
                     key = args.get("key") if isinstance(args, dict) else None
-                    return WidgetAnswer(
-                        key=key, tool=call.function.name, value=_loads(last.content)
-                    )
+                    return WidgetAnswer(key=key, tool=call.function.name, value=_loads(last.content))
         return None

@@ -132,7 +132,9 @@ class OpenAICompatAdapter:
         finished = False
         error: str | None = None
         try:
-            async with self._client.stream("POST", self._url, json=body, headers=headers) as resp:
+            async with self._client.stream(
+                "POST", self._url, json=body, headers=headers
+            ) as resp:
                 if resp.status_code >= 400:
                     raise AgentError(f"Upstream model returned HTTP {resp.status_code}")
                 async for line in resp.aiter_lines():

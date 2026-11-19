@@ -158,3 +158,10 @@ def test_unknown_override_rejected_and_validated(tmp_path):
         App(echo, settings=s, nonsense=1)
     with pytest.raises(ValidationError):
         App(echo, settings=s, port="abc")
+
+
+def test_unknown_override_rejected_without_settings():
+    import pytest
+
+    with pytest.raises(TypeError, match="nonsense"):
+        App(echo, nonsense=1)

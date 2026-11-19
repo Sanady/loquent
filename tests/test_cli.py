@@ -19,11 +19,13 @@ AGENT = textwrap.dedent(
 def captured(monkeypatch):
     calls = {}
 
-    def fake_serve(agent, **kw):
+    def fake_prepare(agent, **kw):
         calls["agent"] = agent
         calls["kw"] = kw
+        return object(), object()
 
-    monkeypatch.setattr(cli, "serve", fake_serve)
+    monkeypatch.setattr(cli, "prepare", fake_prepare)
+    monkeypatch.setattr(cli, "run", lambda app, settings: None)
     return calls
 
 
@@ -173,9 +175,33 @@ def test_cli_invalid_setting(tmp_path, capsys):
     f = tmp_path / "a.py"
     f.write_text(AGENT)
     assert cli.main(["serve", f"{f}:agent", "--port", "abc"]) == 2
+    err = capsys.readouterr().err
+    assert "invalid int value" in err and "Traceback" not in err
     assert cli.main(["serve", f"{f}:agent", "--auth", "password"]) == 2  # no secret key
     err = capsys.readouterr().err
-    assert "Traceback" not in err and "loquent: error:" in err
+    assert "requires LOQUENT_SECRET_KEY" in err and "Traceback" not in err
+
+
+def test_cli_runtime_error_in_uvicorn_propagates(tmp_path, monkeypatch):
+    import uvicorn
+
+    def boom(*a, **k):
+        raise TypeError("runtime failure")
+
+    monkeypatch.setattr(uvicorn, "run", boom)
+    f = tmp_path / "a.py"
+    f.write_text(AGENT)
+    with pytest.raises(TypeError, match="runtime failure"):
+        cli.main(["serve", f"{f}:agent", "--store", f"sqlite:///{tmp_path}/r.db"])
+
+
+def test_cli_file_target_does_not_clobber_sys_modules(tmp_path, captured):
+    f = tmp_path / "json.py"
+    f.write_text(AGENT)
+    import json as real_json
+
+    assert cli.main(["serve", f"{f}:agent"]) == 0
+    assert sys.modules["json"] is real_json
 
 
 def test_cli_invalid_env_setting(tmp_path, monkeypatch, capsys):

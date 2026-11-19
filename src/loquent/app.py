@@ -24,6 +24,13 @@ from loquent.store.base import Store
 from loquent.store.factory import open_store
 
 
+def _checked(overrides: dict[str, Any]) -> dict[str, Any]:
+    unknown = sorted(set(overrides) - set(Settings.model_fields))
+    if unknown:
+        raise TypeError(f"unknown setting(s): {', '.join(unknown)}")
+    return overrides
+
+
 class _LifecycleStore:
     """Makes ``init``/``close`` idempotent and reference-counted.
 
@@ -74,11 +81,9 @@ class App:
         **overrides: Any,
     ) -> None:
         if settings is None:
-            settings = Settings(**overrides)
+            settings = Settings(**_checked(overrides))
         elif overrides:
-            unknown = sorted(set(overrides) - set(Settings.model_fields))
-            if unknown:
-                raise TypeError(f"unknown setting(s): {', '.join(unknown)}")
+            _checked(overrides)
             settings = Settings.model_validate({**settings.model_dump(), **overrides})
         self.settings = settings
         adapter = resolve_agent(
@@ -118,13 +123,16 @@ class App:
         await self._app(scope, receive, send)
 
 
-def serve(agent: Any, **overrides: Any) -> None:
-    """Build an ``App`` from ``agent`` and run it with uvicorn."""
+def prepare(agent: Any, **overrides: Any) -> tuple[App, Settings]:
+    """Validate settings and bind safety and build the ``App``, without starting a server."""
+    settings = Settings(**_checked(overrides))
+    check_bind_safety(settings)
+    return App(agent, settings=settings), settings
+
+
+def run(app: App, settings: Settings) -> None:
     import uvicorn
 
-    settings = Settings(**overrides)
-    check_bind_safety(settings)
-    app = App(agent, settings=settings)
     uvicorn.run(
         app,
         host=settings.host,
@@ -132,3 +140,8 @@ def serve(agent: Any, **overrides: Any) -> None:
         proxy_headers=True,
         forwarded_allow_ips=",".join(settings.forwarded_allow_ips),
     )
+
+
+def serve(agent: Any, **overrides: Any) -> None:
+    """Build an ``App`` from ``agent`` and run it with uvicorn."""
+    run(*prepare(agent, **overrides))
