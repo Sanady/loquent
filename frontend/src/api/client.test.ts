@@ -36,14 +36,22 @@ describe("api client", () => {
     expect(headersOf(2)["X-Loquent-CSRF"]).toBe("tok");
   });
 
-  it("me() with empty csrf (none mode) sends the empty string", async () => {
+  it('me() with empty csrf (none mode) sends "1" on every non-GET (R29)', async () => {
     fetchMock.mockResolvedValueOnce(json({ user: { id: "u" }, csrf: "" }));
     await api.me();
     fetchMock.mockResolvedValueOnce(json({ id: "t", title: "x", updated_at: "" }));
     await api.renameThread("t", "x");
     expect(fetchMock.mock.calls[1][1].method).toBe("PATCH");
-    expect(headersOf(1)["X-Loquent-CSRF"]).toBe("");
+    expect(headersOf(1)["X-Loquent-CSRF"]).toBe("1");
     expect(headersOf(1)["Content-Type"]).toBe("application/json");
+    fetchMock.mockResolvedValueOnce(json({ id: "f", name: "a.txt", content_type: "text/plain", size: 1 }));
+    await api.upload(new File(["x"], "a.txt", { type: "text/plain" }));
+    expect(headersOf(2)["X-Loquent-CSRF"]).toBe("1");
+    fetchMock.mockResolvedValueOnce(new Response(streamOf([]), { status: 200 }));
+    for await (const _ of api.startRun({ thread_id: null, input: { type: "regenerate" }, page_query: {} })) {
+      /* drain */
+    }
+    expect(headersOf(3)["X-Loquent-CSRF"]).toBe("1");
   });
 
   it("upload posts FormData without a manual content type", async () => {

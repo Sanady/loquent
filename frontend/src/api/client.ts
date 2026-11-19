@@ -56,10 +56,12 @@ export interface StreamedEvent {
 }
 
 let csrf = "";
+/** The CSRF header value. The server only needs the header present in auth "none" (no token). */
+const csrfHeader = () => csrf || "1";
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
-  if (method !== "GET") headers["X-Loquent-CSRF"] = csrf;
+  if (method !== "GET") headers["X-Loquent-CSRF"] = csrfHeader();
   const init: RequestInit = { method, headers };
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
@@ -108,7 +110,7 @@ export const api = {
   async upload(file: File): Promise<Attachment> {
     const form = new FormData();
     form.append("file", file);
-    const res = await fetch("api/files", { method: "POST", headers: { "X-Loquent-CSRF": csrf }, body: form });
+    const res = await fetch("api/files", { method: "POST", headers: { "X-Loquent-CSRF": csrfHeader() }, body: form });
     if (!res.ok) throw await toError(res);
     return (await res.json()) as Attachment;
   },
@@ -118,7 +120,7 @@ export const api = {
   async *startRun(body: RunBody, signal?: AbortSignal): AsyncIterable<StreamedEvent> {
     const res = await fetch("api/runs", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream", "X-Loquent-CSRF": csrf },
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream", "X-Loquent-CSRF": csrfHeader() },
       body: JSON.stringify(body),
       signal,
     });

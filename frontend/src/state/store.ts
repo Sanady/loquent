@@ -6,6 +6,7 @@ import {
   type AppConfig,
   type RunBody,
   type RunStatus,
+  type ThreadDetail,
   type ThreadSummary,
   type User,
 } from "../api/client";
@@ -70,6 +71,18 @@ const isTerminal = (s: RunStatus) => s !== "running";
 const runFromStatus = (s: RunStatus): RunState =>
   s === "running" ? "running" : s === "interrupted" ? "interrupted" : s === "failed" ? "failed" : s === "cancelled" ? "cancelled" : "idle";
 
+/** A thread view rebuilt from GET /api/threads/{id}. */
+function viewFromDetail(detail: ThreadDetail): ThreadView {
+  let view = applyEvents(emptyView(), detail.events);
+  const lr = detail.last_run;
+  if (lr) view = { ...view, runId: lr.id, lastSeq: lr.last_seq, run: runFromStatus(lr.status) };
+  if (!lr || isTerminal(lr.status)) {
+    // The run is over: a message whose END never arrived (interrupted, failed) is not streaming.
+    view = { ...view, items: view.items.map((it) => (it.kind === "message" && it.streaming ? { ...it, streaming: false } : it)) };
+  }
+  return view;
+}
+
 const MAX_QUERY_KEYS = 20;
 const MAX_QUERY_BYTES = 1024;
 
@@ -85,6 +98,27 @@ export function trimPageQuery(entries: Iterable<[string, string]>): Record<strin
     n++;
   }
   return out;
+}
+
+/** The thread id named in `location.hash` (`#t=<id>`), if any. Never the query: that is page_query. */
+export function threadFromHash(): string | null {
+  try {
+    return new URLSearchParams(window.location.hash.replace(/^#/, "")).get("t") || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Point `location.hash` at the open thread (or clear it) without adding a history entry. */
+export function writeThreadHash(id: string | null): void {
+  try {
+    const { pathname, search, hash } = window.location;
+    const next = id ? `#t=${encodeURIComponent(id)}` : "";
+    if (hash === next || (!id && hash === "")) return;
+    window.history.replaceState(window.history.state, "", `${pathname}${search}${next}`);
+  } catch {
+    /* no history API (or sandboxed): the thread simply isn't restored on reload */
+  }
 }
 
 function defaultPageQuery(): Record<string, string> {
@@ -183,6 +217,14 @@ export function createAppStore(
             first = false;
             set({ starting: false });
             setView((v) => ({ ...v, lastSeq: 0, runId: undefined }));
+            if (body.input.type === "regenerate" && body.thread_id) {
+              // The superseded run's output is gone from the stored thread: show what is
+              // stored (in the new run's seq space), then keep applying the stream, whose
+              // events up to the reload's last_seq are skipped by seq.
+              setView((v) => applyEvent(v, event, seq)); // RUN_STARTED: the new runId
+              await reloadForRun(body.thread_id, myGen);
+              if (myGen !== gen || ac.signal.aborted) return true;
+            }
           }
           setView((v) => applyEvent(v, event, seq));
           if (event.type === "RUN_FINISHED" || event.type === "RUN_ERROR") terminal = true;
@@ -206,6 +248,58 @@ export function createAppStore(
       release(); // the run is over: sends are allowed again before the list refresh
       if (myGen === gen) await get().refreshThreads();
       return !first;
+    }
+
+    /** Replace the view with the stored thread if its last run is the one now running. */
+    async function reloadForRun(threadId: string, myGen: number) {
+      const runId = get().view.runId;
+      let detail: ThreadDetail;
+      try {
+        detail = await api.thread(threadId);
+      } catch {
+        return; // keep the live view; the stored thread shows on the next open
+      }
+      if (myGen !== gen || !runId || detail.last_run?.id !== runId || get().view.runId !== runId) return;
+      setView(() => viewFromDetail(detail));
+    }
+
+    async function openThreadImpl(id: string, quiet: boolean) {
+      const myGen = ++gen;
+      abort?.abort();
+      const token = ++runToken;
+      busyToken = token; // hold the guard while the thread loads
+      const unhold = () => {
+        if (busyToken === token) busyToken = null;
+      };
+      set({ currentThreadId: id, view: emptyView(), starting: false });
+      let detail: ThreadDetail;
+      try {
+        detail = await api.thread(id);
+      } catch (e) {
+        unhold();
+        if (!quiet) fail(e, myGen);
+        else if (myGen === gen) {
+          // Restoring from the URL: an unknown or unowned id is just a new chat.
+          if (e instanceof ApiError && e.status === 401) set({ user: null });
+          get().newThread();
+        }
+        return;
+      }
+      unhold();
+      if (myGen !== gen) return;
+      const view = viewFromDetail(detail);
+      set({ view });
+      const lr = detail.last_run;
+      if (lr?.status === "running") {
+        // Detached: opening a thread must not block on the run finishing.
+        void poll(lr.id, myGen).then(() => (myGen === gen ? get().refreshThreads() : undefined));
+      }
+    }
+
+    /** After sign-in: reopen the thread named in the URL, if any. */
+    async function restoreThread() {
+      const id = threadFromHash();
+      if (id && get().currentThreadId === null) await openThreadImpl(id, true);
     }
 
     type Flow = (myGen: number, threadId: string | null, ac: AbortController, release: () => void) => Promise<boolean>;
@@ -281,6 +375,7 @@ export function createAppStore(
           const me = await api.me();
           set({ user: me.user });
           await get().refreshThreads();
+          await restoreThread();
         } catch (e) {
           if (e instanceof ApiError && e.status === 401) set({ user: null });
         }
@@ -291,6 +386,7 @@ export function createAppStore(
           const r = await api.login(username, password);
           set({ user: r.user, authError: null });
           await get().refreshThreads();
+          await restoreThread();
         } catch (e) {
           set({ authError: e instanceof ApiError && e.status === 401 ? "Invalid username or password." : errorMessage(e instanceof ApiError ? e.code : "") });
         }
@@ -354,34 +450,7 @@ export function createAppStore(
         await get().refreshThreads();
       },
 
-      async openThread(id) {
-        const myGen = ++gen;
-        abort?.abort();
-        const token = ++runToken;
-        busyToken = token; // hold the guard while the thread loads
-        const unhold = () => {
-          if (busyToken === token) busyToken = null;
-        };
-        set({ currentThreadId: id, view: emptyView(), starting: false });
-        let detail;
-        try {
-          detail = await api.thread(id);
-        } catch (e) {
-          unhold();
-          fail(e, myGen);
-          return;
-        }
-        unhold();
-        if (myGen !== gen) return;
-        let view = applyEvents(emptyView(), detail.events);
-        const lr = detail.last_run;
-        if (lr) view = { ...view, runId: lr.id, lastSeq: lr.last_seq, run: runFromStatus(lr.status) };
-        set({ view });
-        if (lr?.status === "running") {
-          // Detached: opening a thread must not block on the run finishing.
-          void poll(lr.id, myGen).then(() => (myGen === gen ? get().refreshThreads() : undefined));
-        }
-      },
+      openThread: (id) => openThreadImpl(id, false),
 
       newThread() {
         gen++;
@@ -424,6 +493,10 @@ export function createAppStore(
         }
       },
     };
+  });
+  // The open thread lives in the URL hash, so a reload reopens it.
+  store.subscribe((s, prev) => {
+    if (s.currentThreadId !== prev.currentThreadId) writeThreadHash(s.currentThreadId);
   });
   return store;
 }

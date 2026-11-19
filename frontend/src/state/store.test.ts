@@ -42,7 +42,10 @@ function fakeApi(over: Partial<Record<keyof Api, unknown>> = {}): FakeApi {
 
 const polled = (status: RunEvents["status"], events: StreamedEvent[]): RunEvents => ({ status, events });
 
-beforeEach(() => vi.useFakeTimers());
+beforeEach(() => {
+  vi.useFakeTimers();
+  history.replaceState(null, "", "/"); // the open thread is mirrored into location.hash
+});
 afterEach(() => vi.useRealTimers());
 
 describe("store", () => {
@@ -604,5 +607,170 @@ describe("store", () => {
     s.getState().newThread();
     release();
     await expect(p).resolves.toBe(true);
+  });
+});
+
+const userMsg = (id: string, t: string): AgUiEvent[] => [
+  { type: "TEXT_MESSAGE_START", messageId: id, role: "user" },
+  { type: "TEXT_MESSAGE_CONTENT", messageId: id, delta: t },
+  { type: "TEXT_MESSAGE_END", messageId: id },
+];
+const detail = (events: AgUiEvent[], last_run: { id: string; status: RunStatus; last_seq: number } | null) => ({
+  thread: { id: "t1", title: "x", updated_at: "" },
+  events,
+  last_run,
+});
+const messages = (s: ReturnType<typeof createAppStore>) =>
+  s.getState().view.items.flatMap((i) => (i.kind === "message" ? [`${i.role}:${i.text}`] : []));
+
+describe("regenerate and Retry replace the superseded run in the view (item 2)", () => {
+  it("reloads the thread once accepted, so only the new reply remains", async () => {
+    const first = [started("r1"), ...userMsg("u1", "q"), ...text("m1", "old"), { type: "RUN_FINISHED" } as AgUiEvent];
+    // The server's view after the new run r2 persisted its first three events.
+    const after = [...userMsg("u1", "q"), started("r2"), { type: "TEXT_MESSAGE_START", messageId: "m2" }, { type: "TEXT_MESSAGE_CONTENT", messageId: "m2", delta: "new" }] as AgUiEvent[];
+    const thread = vi
+      .fn()
+      .mockResolvedValueOnce(detail(first, { id: "r1", status: "succeeded", last_seq: 8 }))
+      .mockResolvedValueOnce(detail(after, { id: "r2", status: "running", last_seq: 3 }));
+    const api = fakeApi({
+      thread,
+      startRun: vi.fn(() => stream(seqd([started("r2"), ...text("m2", "new"), { type: "RUN_FINISHED" }]))),
+    });
+    const s = createAppStore(api);
+    await s.getState().openThread("t1");
+    expect(messages(s)).toEqual(["user:q", "assistant:old"]);
+    expect(await s.getState().regenerate()).toBe(true);
+    expect(thread).toHaveBeenCalledTimes(2);
+    // Exactly one reply, not doubled: streamed seq 1..3 were already in the reloaded view.
+    expect(messages(s)).toEqual(["user:q", "assistant:new"]);
+    expect(s.getState().view).toMatchObject({ runId: "r2", lastSeq: 5, run: "idle" });
+  });
+
+  it("Retry after a failed run drops the old error item", async () => {
+    const first = [started("r1"), ...userMsg("u1", "q"), { type: "RUN_ERROR", message: "boom" } as AgUiEvent];
+    const thread = vi
+      .fn()
+      .mockResolvedValueOnce(detail(first, { id: "r1", status: "failed", last_seq: 5 }))
+      .mockResolvedValueOnce(detail([...userMsg("u1", "q")], { id: "r2", status: "running", last_seq: 0 }));
+    const api = fakeApi({
+      thread,
+      startRun: vi.fn(() => stream(seqd([started("r2"), ...text("m2", "fine"), { type: "RUN_FINISHED" }]))),
+    });
+    const s = createAppStore(api);
+    await s.getState().openThread("t1");
+    expect(s.getState().view.items.some((i) => i.kind === "error")).toBe(true);
+    await s.getState().regenerate();
+    expect(s.getState().view.items.some((i) => i.kind === "error")).toBe(false);
+    expect(messages(s)).toEqual(["user:q", "assistant:fine"]);
+  });
+
+  it("a refused regenerate (409) reloads nothing and keeps the view", async () => {
+    const first = [started("r1"), ...userMsg("u1", "q"), ...text("m1", "old"), { type: "RUN_FINISHED" } as AgUiEvent];
+    const thread = vi.fn(async () => detail(first, { id: "r1", status: "succeeded", last_seq: 8 }));
+    const api = fakeApi({
+      thread,
+      startRun: vi.fn(() => {
+        throw new ApiError(409, "run_in_progress");
+      }),
+    });
+    const s = createAppStore(api);
+    await s.getState().openThread("t1");
+    await s.getState().regenerate();
+    expect(thread).toHaveBeenCalledTimes(1);
+    expect(messages(s)).toEqual(["user:q", "assistant:old"]);
+  });
+});
+
+describe("history replay clears stale streaming flags (item 18)", () => {
+  it("marks messages not streaming when the last run is terminal", async () => {
+    const events = [started("r1"), ...userMsg("u1", "q"), { type: "TEXT_MESSAGE_START", messageId: "m1" }, { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "cut" }] as AgUiEvent[];
+    for (const status of ["interrupted", "failed", "cancelled", "succeeded"] as const) {
+      const api = fakeApi({ thread: vi.fn(async () => detail(events, { id: "r1", status, last_seq: 6 })) });
+      const s = createAppStore(api);
+      await s.getState().openThread("t1");
+      const msgs = s.getState().view.items.filter((i) => i.kind === "message");
+      expect(msgs.every((m) => m.kind === "message" && !m.streaming)).toBe(true);
+    }
+  });
+
+  it("keeps the streaming flag while the run is still running", async () => {
+    const events = [started("r1"), { type: "TEXT_MESSAGE_START", messageId: "m1" }] as AgUiEvent[];
+    const api = fakeApi({
+      thread: vi.fn(async () => detail(events, { id: "r1", status: "running", last_seq: 2 })),
+      runEvents: vi.fn(async () => polled("running", [])),
+    });
+    const s = createAppStore(api);
+    await s.getState().openThread("t1");
+    expect(s.getState().view.items[0]).toMatchObject({ kind: "message", streaming: true });
+    s.getState().newThread();
+  });
+});
+
+describe("the open thread lives in location.hash (item 3)", () => {
+  beforeEach(() => history.replaceState(null, "", "/?team=a"));
+  afterEach(() => history.replaceState(null, "", "/"));
+
+  it("openThread and newThread write #t=<id> with replaceState and keep the query", async () => {
+    const replace = vi.spyOn(history, "replaceState");
+    const api = fakeApi({ thread: vi.fn(async () => detail([], null)) });
+    const s = createAppStore(api);
+    await s.getState().openThread("t 1");
+    expect(location.hash).toBe("#t=t%201");
+    expect(location.search).toBe("?team=a");
+    s.getState().newThread();
+    expect(location.hash).toBe("");
+    expect(location.search).toBe("?team=a");
+    expect(replace).toHaveBeenCalled();
+    replace.mockRestore();
+  });
+
+  it("a thread created by the first send is written to the hash", async () => {
+    const api = fakeApi({ startRun: vi.fn(() => stream(seqd([started("r1", "t9"), { type: "RUN_FINISHED" }]))) });
+    const s = createAppStore(api);
+    await s.getState().send("hi", []);
+    expect(location.hash).toBe("#t=t9");
+  });
+
+  it("init reopens the thread named in the hash", async () => {
+    history.replaceState(null, "", "/?team=a#t=t1");
+    const thread = vi.fn(async () => detail([...userMsg("u1", "q")], { id: "r1", status: "succeeded", last_seq: 3 }));
+    const api = fakeApi({ thread });
+    const s = createAppStore(api);
+    await s.getState().init();
+    expect(thread).toHaveBeenCalledWith("t1");
+    expect(s.getState().currentThreadId).toBe("t1");
+    expect(messages(s)).toEqual(["user:q"]);
+  });
+
+  it.each([404, 401])("init with an unknown or unowned id (%i) falls back to a new chat with no error", async (status) => {
+    history.replaceState(null, "", "/?team=a#t=nope");
+    const api = fakeApi({
+      thread: vi.fn(async () => {
+        throw new ApiError(status, status === 404 ? "not_found" : "unauthorized");
+      }),
+    });
+    const s = createAppStore(api);
+    await s.getState().init();
+    expect(s.getState().currentThreadId).toBeNull();
+    expect(s.getState().view.items).toEqual([]);
+    expect(location.hash).toBe("");
+  });
+
+  it("login in password mode reopens the hash thread", async () => {
+    history.replaceState(null, "", "/#t=t1");
+    const thread = vi.fn(async () => detail([], null));
+    const api = fakeApi({
+      me: vi.fn(async () => {
+        throw new ApiError(401, "unauthorized");
+      }),
+      thread,
+    });
+    const s = createAppStore(api);
+    await s.getState().init();
+    expect(thread).not.toHaveBeenCalled();
+    expect(location.hash).toBe("#t=t1"); // kept for after sign-in
+    await s.getState().login("a", "b");
+    expect(thread).toHaveBeenCalledWith("t1");
+    expect(s.getState().currentThreadId).toBe("t1");
   });
 });
