@@ -53,6 +53,7 @@ export async function* parseSSE(body: ReadableStream<Uint8Array>): AsyncIterable
     const last = flush(); // final frame without a trailing blank line
     if (last) yield last;
   } finally {
+    await reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
 }

@@ -12,6 +12,8 @@ import {
 import { applyEvent, applyEvents, emptyView, type AgUiEvent, type Attachment, type RunState, type ThreadView } from "./reducer";
 
 const POLL_MS = 1000;
+const POLL_MAX_MS = 10000;
+const POLL_FAIL_NOTICE = 5;
 const DELETE_WAIT_MS = 30000;
 
 const MESSAGES: Record<string, string> = {
@@ -59,9 +61,26 @@ const isTerminal = (s: RunStatus) => s !== "running";
 const runFromStatus = (s: RunStatus): RunState =>
   s === "running" ? "running" : s === "interrupted" ? "interrupted" : s === "failed" ? "failed" : s === "cancelled" ? "cancelled" : "idle";
 
+const MAX_QUERY_KEYS = 20;
+const MAX_QUERY_BYTES = 1024;
+
+/** Keep the first 20 entries and drop any whose key or value exceeds 1024 UTF-8 bytes (server limits). */
+export function trimPageQuery(entries: Iterable<[string, string]>): Record<string, string> {
+  const enc = new TextEncoder();
+  const out: Record<string, string> = {};
+  let n = 0;
+  for (const [k, v] of entries) {
+    if (n >= MAX_QUERY_KEYS) break;
+    if (enc.encode(k).length > MAX_QUERY_BYTES || enc.encode(v).length > MAX_QUERY_BYTES) continue;
+    out[k] = v;
+    n++;
+  }
+  return out;
+}
+
 function defaultPageQuery(): Record<string, string> {
   try {
-    return Object.fromEntries(new URLSearchParams(window.location.search));
+    return trimPageQuery(new URLSearchParams(window.location.search).entries());
   } catch {
     return {};
   }
@@ -71,10 +90,13 @@ export function createAppStore(
   api: Api = defaultApi,
   opts: { pageQuery?: () => Record<string, string> } = {},
 ): AppStore {
-  const pageQuery = opts.pageQuery ?? defaultPageQuery;
+  const pageQuery = () => trimPageQuery(Object.entries((opts.pageQuery ?? defaultPageQuery)()));
   // Bumped whenever the visible thread changes; stale consumers stop touching the view.
   let gen = 0;
   let abort: AbortController | null = null;
+  // Single-run invariant: token of the send/answer/regenerate flow currently starting or running.
+  let runToken = 0;
+  let busyToken: number | null = null;
 
   const store = createStore<AppState>()((set, get) => {
     const setView = (fn: (v: ThreadView) => ThreadView) => set((s) => ({ view: fn(s.view) }));
@@ -103,21 +125,32 @@ export function createAppStore(
     }
 
     async function poll(runId: string, myGen: number) {
+      const stale = () => myGen !== gen || get().view.runId !== runId;
+      const abandon = (run: RunState) =>
+        setView((v) => (v.runId === runId && v.run === "running" ? { ...v, run } : v));
+      let delay = POLL_MS;
+      let failures = 0;
       for (;;) {
-        await sleep(POLL_MS);
-        if (myGen !== gen) return;
+        await sleep(delay);
+        if (stale()) return;
         let res;
         try {
           res = await api.runEvents(runId, get().view.lastSeq);
         } catch (e) {
-          if (myGen !== gen) return;
-          if (e instanceof ApiError) {
+          if (stale()) return;
+          if (e instanceof ApiError && (e.status === 401 || e.status === 404)) {
             if (e.status === 401) set({ user: null });
-            if (e.status === 401 || e.status === 404) return;
+            abandon("interrupted");
+            return;
           }
-          continue; // transient failure: try again next tick
+          failures++;
+          delay = Math.min(delay * 2, POLL_MAX_MS);
+          if (failures === POLL_FAIL_NOTICE) pushError("Connection lost.");
+          continue;
         }
-        if (myGen !== gen) return;
+        if (stale()) return;
+        failures = 0;
+        delay = POLL_MS;
         setView((v) => res.events.reduce((acc, x) => applyEvent(acc, x.event, x.seq), v));
         if (isTerminal(res.status)) {
           finalize(res.status);
@@ -126,15 +159,19 @@ export function createAppStore(
       }
     }
 
-    async function consume(body: RunBody) {
-      const myGen = gen;
+    async function consume(body: RunBody, myGen: number) {
       const ac = new AbortController();
       abort = ac;
-      setView((v) => ({ ...v, lastSeq: 0, runId: undefined }));
       let terminal = false;
+      let first = true;
       try {
         for await (const { seq, event } of api.startRun(body, ac.signal)) {
           if (myGen !== gen) return;
+          if (first) {
+            // The server accepted the run: only now start a fresh seq space.
+            first = false;
+            setView((v) => ({ ...v, lastSeq: 0, runId: undefined }));
+          }
           setView((v) => applyEvent(v, event, seq));
           if (event.type === "RUN_FINISHED" || event.type === "RUN_ERROR") terminal = true;
           const tid = (event as { threadId?: string }).threadId;
@@ -148,29 +185,53 @@ export function createAppStore(
       if (myGen !== gen) return;
       if (!terminal) {
         const runId = get().view.runId;
-        if (runId) await poll(runId, myGen);
+        if (runId && !first) await poll(runId, myGen);
         else pushError("Connection lost. Please try again.");
       }
       if (myGen === gen) await get().refreshThreads();
     }
 
-    async function run(input: RunBody["input"]) {
-      await consume({ thread_id: get().currentThreadId, input, page_query: pageQuery() });
+    /** Run a start flow exclusively. A second start while one is starting or running is a silent no-op. */
+    async function exclusive(fn: (myGen: number, threadId: string | null) => Promise<void>) {
+      if (busyToken !== null || get().view.run === "running") return;
+      const token = ++runToken;
+      busyToken = token;
+      try {
+        await fn(gen, get().currentThreadId);
+      } finally {
+        if (busyToken === token) busyToken = null;
+      }
     }
 
-    function waitNotRunning(): Promise<void> {
-      return new Promise((resolve) => {
-        if (get().view.run !== "running") return resolve();
-        const timer = setTimeout(done, DELETE_WAIT_MS);
-        const unsub = store.subscribe((s) => {
-          if (s.view.run !== "running") done();
+    const startRunFlow = (input: RunBody["input"]) => (myGen: number, threadId: string | null) =>
+      consume({ thread_id: threadId, input, page_query: pageQuery() }, myGen);
+
+    async function waitNotRunning(id: string): Promise<void> {
+      if (get().currentThreadId === id) {
+        await new Promise<void>((resolve) => {
+          if (get().view.run !== "running") return resolve();
+          const timer = setTimeout(done, DELETE_WAIT_MS);
+          const unsub = store.subscribe((s) => {
+            if (s.currentThreadId !== id || s.view.run !== "running") done();
+          });
+          function done() {
+            clearTimeout(timer);
+            unsub();
+            resolve();
+          }
         });
-        function done() {
-          clearTimeout(timer);
-          unsub();
-          resolve();
+        if (get().currentThreadId === id) return;
+      }
+      // The user switched away: watch the thread itself.
+      for (let waited = 0; waited < DELETE_WAIT_MS; waited += POLL_MS) {
+        try {
+          const d = await api.thread(id);
+          if (d.last_run?.status !== "running") return;
+        } catch {
+          return;
         }
-      });
+        await sleep(POLL_MS);
+      }
     }
 
     return {
@@ -211,6 +272,7 @@ export function createAppStore(
           /* session is gone either way */
         }
         gen++;
+        busyToken = null;
         abort?.abort();
         set({ user: null, threads: [], currentThreadId: null, view: emptyView() });
       },
@@ -236,7 +298,17 @@ export function createAppStore(
         const isCurrent = get().currentThreadId === id;
         if (isCurrent && get().view.run === "running") {
           await get().stop();
-          await waitNotRunning();
+          await waitNotRunning(id);
+        } else if (!isCurrent) {
+          try {
+            const lr = (await api.thread(id)).last_run;
+            if (lr?.status === "running") {
+              await api.cancel(lr.id);
+              await waitNotRunning(id);
+            }
+          } catch {
+            /* let the delete itself report any problem */
+          }
         }
         try {
           await api.deleteThread(id);
@@ -253,6 +325,7 @@ export function createAppStore(
 
       async openThread(id) {
         const myGen = ++gen;
+        busyToken = null;
         abort?.abort();
         set({ currentThreadId: id, view: emptyView() });
         let detail;
@@ -275,23 +348,27 @@ export function createAppStore(
 
       newThread() {
         gen++;
+        busyToken = null;
         abort?.abort();
         set({ currentThreadId: null, view: emptyView() });
       },
 
-      async send(text, files) {
-        let ids: string[];
-        try {
-          ids = await Promise.all(files.map(async (f) => (f instanceof File ? (await api.upload(f)).id : f.id)));
-        } catch (e) {
-          fail(e, gen);
-          return;
-        }
-        await run({ type: "message", content: text, attachments: ids });
-      },
+      send: (text, files) =>
+        exclusive(async (myGen, threadId) => {
+          let ids: string[];
+          try {
+            ids = await Promise.all(files.map(async (f) => (f instanceof File ? (await api.upload(f)).id : f.id)));
+          } catch (e) {
+            fail(e, myGen);
+            return;
+          }
+          if (myGen !== gen || get().currentThreadId !== threadId) return;
+          await startRunFlow({ type: "message", content: text, attachments: ids })(myGen, threadId);
+        }),
 
-      answer: (toolCallId, value) => run({ type: "tool_result", tool_call_id: toolCallId, answer: value }),
-      regenerate: () => run({ type: "regenerate" }),
+      answer: (toolCallId, value) =>
+        exclusive(startRunFlow({ type: "tool_result", tool_call_id: toolCallId, answer: value })),
+      regenerate: () => exclusive(startRunFlow({ type: "regenerate" })),
 
       async stop() {
         const { runId, run: state } = get().view;

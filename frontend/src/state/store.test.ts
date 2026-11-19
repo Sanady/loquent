@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
-import { ApiError, type Api, type RunBody, type RunEvents, type StreamedEvent } from "../api/client";
+import { ApiError, type Api, type RunBody, type RunEvents, type RunStatus, type StreamedEvent } from "../api/client";
 import type { AgUiEvent } from "./reducer";
-import { createAppStore } from "./store";
+import { createAppStore, trimPageQuery } from "./store";
 
 const started = (runId = "r1", threadId = "t1"): AgUiEvent => ({ type: "RUN_STARTED", threadId, runId });
 const text = (id: string, t: string): AgUiEvent[] => [
@@ -346,5 +346,160 @@ describe("store", () => {
     expect(runEvents).not.toHaveBeenCalled();
     s.getState().newThread();
     expect(s.getState().currentThreadId).toBeNull();
+  });
+
+  const threadWith = (status: RunStatus, id = "r1", seq = 9) =>
+    vi.fn(async (tid: string = "t1") => ({
+      thread: { id: tid, title: "x", updated_at: "" },
+      events: [],
+      last_run: { id, status, last_seq: seq },
+    }));
+
+  it("a 409 keeps the existing runId and lastSeq", async () => {
+    const api = fakeApi({
+      thread: threadWith("succeeded"),
+      startRun: vi.fn(() => {
+        throw new ApiError(409, "run_in_progress");
+      }),
+    });
+    const s = createAppStore(api);
+    await s.getState().openThread("t1");
+    await s.getState().send("hi", []);
+    expect(s.getState().view).toMatchObject({ runId: "r1", lastSeq: 9 });
+    expect(s.getState().view.items.at(-1)).toMatchObject({ code: "run_in_progress" });
+  });
+
+  it("a stale poll response for run A after run B started changes nothing", async () => {
+    let resolve!: (r: RunEvents) => void;
+    const api = fakeApi({
+      thread: threadWith("running", "rA", 3),
+      runEvents: vi.fn(() => new Promise<RunEvents>((r) => (resolve = r))),
+    });
+    const s = createAppStore(api);
+    await s.getState().openThread("t1");
+    await vi.advanceTimersByTimeAsync(1000);
+    const b = { items: [], run: "running" as const, runId: "rB", lastSeq: 1 };
+    s.setState({ view: b });
+    resolve(polled("succeeded", seqd(text("mA", "stale"), 4)));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(s.getState().view).toBe(b);
+  });
+
+  it("a double send makes exactly one startRun call", async () => {
+    const api = fakeApi({ startRun: vi.fn(() => stream(seqd([started(), { type: "RUN_FINISHED" }]))) });
+    const s = createAppStore(api);
+    await Promise.all([s.getState().send("a", []), s.getState().send("b", [])]);
+    expect(api.startRun).toHaveBeenCalledTimes(1);
+    expect(s.getState().view.items.some((i) => i.kind === "error")).toBe(false);
+  });
+
+  it("switching threads during an upload posts nothing", async () => {
+    let done!: (a: { id: string; name: string; content_type: string; size: number }) => void;
+    const api = fakeApi({
+      thread: threadWith("succeeded"),
+      upload: vi.fn(() => new Promise((r) => (done = r))),
+      startRun: vi.fn(() => stream([])),
+    });
+    const s = createAppStore(api);
+    await s.getState().openThread("t1");
+    const p = s.getState().send("hi", [new File(["x"], "a.txt")]);
+    await s.getState().openThread("t2");
+    done({ id: "f", name: "a", content_type: "x", size: 1 });
+    await p;
+    expect(api.startRun).not.toHaveBeenCalled();
+    expect(s.getState().currentThreadId).toBe("t2");
+    expect(s.getState().view.items).toEqual([]);
+  });
+
+  it("an upload failure is not reported into another thread's view", async () => {
+    let fail!: (e: unknown) => void;
+    const api = fakeApi({
+      thread: threadWith("succeeded"),
+      upload: vi.fn(() => new Promise((_r, rej) => (fail = rej))),
+    });
+    const s = createAppStore(api);
+    await s.getState().openThread("t1");
+    const p = s.getState().send("hi", [new File(["x"], "a.txt")]);
+    await s.getState().openThread("t2");
+    fail(new ApiError(415, "unsupported_media_type"));
+    await p;
+    expect(s.getState().view.items).toEqual([]);
+  });
+
+  it("trims page_query to 20 entries and drops entries over 1024 bytes", () => {
+    const entries: [string, string][] = Array.from({ length: 30 }, (_, i) => [`k${i}`, "v"]);
+    expect(Object.keys(trimPageQuery(entries))).toHaveLength(20);
+    const out = trimPageQuery([["big", "x".repeat(1025)], ["é".repeat(513), "v"], ["ok", "é".repeat(512)]]);
+    expect(Object.keys(out)).toEqual(["ok"]);
+  });
+
+  it("send applies the trim to the configured page query", async () => {
+    const api = fakeApi({ startRun: vi.fn(() => stream(seqd([started(), { type: "RUN_FINISHED" }]))) });
+    const s = createAppStore(api, {
+      pageQuery: () => Object.fromEntries(Array.from({ length: 25 }, (_, i) => [`k${i}`, "v"])),
+    });
+    await s.getState().send("hi", []);
+    expect(Object.keys((api.startRun.mock.calls[0][0] as RunBody).page_query)).toHaveLength(20);
+  });
+
+  it("poll errors back off, report Connection lost after 5, and keep polling", async () => {
+    const runEvents = vi.fn().mockRejectedValue(new TypeError("net"));
+    const api = fakeApi({ thread: threadWith("running", "r1", 3), runEvents });
+    const s = createAppStore(api);
+    await s.getState().openThread("t1");
+    await vi.advanceTimersByTimeAsync(1000); // call 1, next delay 2000
+    expect(runEvents).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(runEvents).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1); // call 2, delay 4000
+    await vi.advanceTimersByTimeAsync(4000); // call 3, delay 8000
+    await vi.advanceTimersByTimeAsync(8000); // call 4, delay 10000 (cap)
+    expect(s.getState().view.items).toEqual([]);
+    await vi.advanceTimersByTimeAsync(10000); // call 5
+    expect(runEvents).toHaveBeenCalledTimes(5);
+    expect(s.getState().view.items).toEqual([{ kind: "error", message: "Connection lost." }]);
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(runEvents).toHaveBeenCalledTimes(6);
+    expect(s.getState().view.items).toHaveLength(1);
+  });
+
+  it("poll exits on 404 with the run interrupted, and on 401 with user cleared", async () => {
+    for (const [status, code] of [[404, "not_found"], [401, "unauthorized"]] as const) {
+      const api = fakeApi({
+        thread: threadWith("running", "r1", 3),
+        runEvents: vi.fn().mockRejectedValue(new ApiError(status, code)),
+      });
+      const s = createAppStore(api);
+      await s.getState().init();
+      await s.getState().openThread("t1");
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(s.getState().view.run).toBe("interrupted");
+      expect(s.getState().user === null).toBe(status === 401);
+    }
+  });
+
+  it("delete waits on the thread itself after the user switched away", async () => {
+    const statuses: RunStatus[] = ["running", "running", "cancelled"];
+    const order: string[] = [];
+    const api = fakeApi({
+      thread: vi.fn(async (id: string) => ({
+        thread: { id, title: "x", updated_at: "" },
+        events: [],
+        last_run: { id: "r" + id, status: id === "a" ? (statuses.shift() ?? "cancelled") : "succeeded", last_seq: 0 },
+      })),
+      runEvents: vi.fn(async () => polled("running", [])),
+      deleteThread: vi.fn(async () => {
+        order.push("delete");
+      }),
+    });
+    const s = createAppStore(api);
+    await s.getState().openThread("b");
+    const p = s.getState().deleteThread("a");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(api.deleteThread).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(3000);
+    await p;
+    expect(order).toEqual(["delete"]);
+    expect(s.getState().currentThreadId).toBe("b");
   });
 });
