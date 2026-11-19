@@ -133,10 +133,23 @@ async def pending_widget_call(
     return name, args
 
 
-async def last_visible_run(deps: Deps, thread_id: str) -> Run | None:
-    """The thread's last run that is not superseded."""
-    runs = [r for r in await deps.store.list_runs(thread_id) if not r.superseded]
+async def last_visible_run(
+    deps: Deps, thread_id: str, *, ignore_run: str | None = None
+) -> Run | None:
+    """The thread's last run that is not superseded (optionally ignoring one run)."""
+    runs = [
+        r for r in await deps.store.list_runs(thread_id) if not r.superseded and r.id != ignore_run
+    ]
     return runs[-1] if runs else None
+
+
+async def discard_run(deps: Deps, run: Run) -> None:
+    """Hide and close a run that was created but will never start."""
+    try:
+        await deps.store.mark_superseded(run.id)
+        await deps.store.finish_run(run.id, "cancelled")
+    except Exception:
+        log.exception("could not discard run %s", run.id)
 
 
 def routes(deps: Deps) -> list[Route]:
@@ -214,15 +227,19 @@ def routes(deps: Deps) -> list[Route]:
             supersede = last
 
         run = await create_run(thread.id)
-        if isinstance(inp, ToolResultInput):
-            # Check again now that our run holds the thread: another request (maybe on
-            # another replica) may have answered the call between our check and create_run.
-            try:
+        # Check again now that our run holds the thread: another request (maybe on another
+        # replica) may have answered the call, or run, between our first check and
+        # create_run. On any failure here the new run is discarded, never left running.
+        try:
+            if isinstance(inp, ToolResultInput):
                 await pending_widget_call(deps, thread.id, inp.tool_call_id, ignore_run=run.id)
-            except ApiError:
-                await store.mark_superseded(run.id)
-                await store.finish_run(run.id, "cancelled")
-                raise
+            elif supersede is not None:
+                latest = await last_visible_run(deps, thread.id, ignore_run=run.id)
+                if latest is None or latest.id != supersede.id:
+                    raise ApiError(409, "run_in_progress")
+        except BaseException:
+            await discard_run(deps, run)
+            raise
         try:
             if supersede is not None:
                 await store.mark_superseded(supersede.id)

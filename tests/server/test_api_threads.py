@@ -164,3 +164,36 @@ async def test_thread_view_events_match_last_seq_while_run_is_live():
 
         gate.set()
         await asyncio.wait_for(first, 5)
+
+
+async def test_delete_thread_while_run_is_live_is_409():
+    """R19: deleting would erase the cancel flag with the run row; the client must Stop first."""
+    import asyncio
+
+    gate = asyncio.Event()
+    entered = asyncio.Event()
+
+    async def slow(messages):
+        entered.set()
+        await gate.wait()
+        return "done"
+
+    async with make_client(slow) as c:
+        first = asyncio.create_task(run_message(c, "slow"))
+        await asyncio.wait_for(entered.wait(), 5)
+        (thread,) = (await c.get("/api/threads")).json()
+        tid = thread["id"]
+
+        r = await c.delete(f"/api/threads/{tid}")
+        assert r.status_code == 409
+        assert r.json() == {"error": "run_in_progress"}
+        assert (await c.get(f"/api/threads/{tid}")).status_code == 200
+        (run,) = await c.store.list_runs(tid)
+        assert not run.cancel_requested  # refused outright, the run is untouched
+
+        gate.set()
+        await asyncio.wait_for(first, 5)
+        r = await c.delete(f"/api/threads/{tid}")
+        assert r.status_code == 204
+        assert (await c.get(f"/api/threads/{tid}")).status_code == 404
+        assert await c.store.list_runs(tid) == []

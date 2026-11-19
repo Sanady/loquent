@@ -602,3 +602,65 @@ async def test_oversized_json_body_is_400():
         )
         assert r.status_code == 400
         assert (await c.get("/api/threads")).json() == []
+
+
+async def test_regenerate_raced_by_another_run_is_409():
+    """Another request ran on the thread between our check and create_run."""
+    async with make_client() as c:
+        ev = sse_events(await run_message(c, "q"))
+        tid, old = started(ev)["threadId"], started(ev)["runId"]
+        real_create = c.store.create_run
+        ours = []
+
+        async def racing_create_run(thread_id, **kw):
+            other = await real_create(thread_id, **kw)  # e.g. a regenerate on another replica
+            await c.store.mark_superseded(old)
+            await c.store.finish_run(other.id, "succeeded")
+            run = await real_create(thread_id, **kw)
+            ours.append(run.id)
+            return run
+
+        c.store.create_run = racing_create_run
+        r = await c.post("/api/runs", json={"thread_id": tid, "input": {"type": "regenerate"}})
+        c.store.create_run = real_create
+        assert r.status_code == 409
+        assert r.json() == {"error": "run_in_progress"}
+        run = await c.store.get_run(ours[0])
+        assert run.superseded and run.status == "cancelled"
+        assert await c.store.list_events(run.id) == []
+
+
+@pytest.mark.parametrize("kind", ["tool_result", "regenerate"])
+async def test_recheck_failure_of_any_kind_discards_new_run(kind):
+    async with make_client(confirm_agent) as c:
+        ev = sse_events(await run_message(c, "ask"))
+        tid = started(ev)["threadId"]
+        call_id = pending_call(ev)
+        if kind == "regenerate":
+            body = {"thread_id": tid, "input": {"type": "regenerate"}}
+        else:
+            body = {
+                "thread_id": tid,
+                "input": {"type": "tool_result", "tool_call_id": call_id,
+                          "answer": {"confirmed": True}},
+            }  # fmt: skip
+        real_create, real_list = c.store.create_run, c.store.list_runs
+        ours = []
+
+        async def create_run(thread_id, **kw):
+            run = await real_create(thread_id, **kw)
+            ours.append(run.id)
+            return run
+
+        async def list_runs(thread_id):
+            if ours:
+                raise RuntimeError("store hiccup during re-check")
+            return await real_list(thread_id)
+
+        c.store.create_run, c.store.list_runs = create_run, list_runs
+        with pytest.raises(RuntimeError):
+            await c.post("/api/runs", json=body)
+        c.store.create_run, c.store.list_runs = real_create, real_list
+        run = await c.store.get_run(ours[0])
+        assert run.superseded and run.status == "cancelled"
+        assert c.app.state.live_runs == {}

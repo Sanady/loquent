@@ -231,7 +231,7 @@ class SqliteStore:
 
     async def is_cancel_requested(self, run_id: str) -> bool:
         r = await self._one("SELECT cancel_requested FROM runs WHERE id=?", (run_id,))
-        return bool(r and r["cancel_requested"])
+        return r is None or bool(r["cancel_requested"])  # a deleted run must stop
 
     async def mark_superseded(self, run_id: str) -> None:
         await self._write("UPDATE runs SET superseded=1 WHERE id=?", (run_id,))

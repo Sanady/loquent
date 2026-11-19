@@ -203,7 +203,7 @@ class MongoStore:
 
     async def is_cancel_requested(self, run_id: str) -> bool:
         d = await self._db.runs.find_one({"_id": run_id}, {"cancel_requested": 1})
-        return bool(d and d.get("cancel_requested"))
+        return d is None or bool(d.get("cancel_requested"))  # a deleted run must stop
 
     async def mark_superseded(self, run_id: str) -> None:
         await self._db.runs.update_one({"_id": run_id}, {"$set": {"superseded": True}})

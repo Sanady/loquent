@@ -12,7 +12,7 @@ from starlette.routing import Route
 from loquent.runner import effective_status
 from loquent.store.models import Thread
 
-from .deps import Deps, json_body
+from .deps import ApiError, Deps, json_body
 from .routes_runs import last_visible_run
 
 MAX_TITLE = 200
@@ -93,9 +93,11 @@ def routes(deps: Deps) -> list[Route]:
     async def delete_thread(request: Request) -> Response:
         user = await deps.user(request)
         thread = await deps.owned_thread(user, request.path_params["thread_id"])
-        for run in await store.list_runs(thread.id):
-            if run.status == "running":
-                await store.request_cancel(run.id)
+        # Refuse while a run is live; the client stops it first. (Deleting would erase the
+        # cancel flag with the run row; stores treat a missing run as cancelled anyway.)
+        last = await last_visible_run(deps, thread.id)
+        if last is not None and await effective_status(store, last) == "running":
+            raise ApiError(409, "run_in_progress")
         await store.delete_thread(thread.id)
         return Response(status_code=204)
 

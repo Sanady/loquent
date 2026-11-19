@@ -102,6 +102,16 @@ async def test_cancel_flag_roundtrip(store: Store):
     assert (await store.get_run(run.id)).cancel_requested is True
 
 
+async def test_is_cancel_requested_true_for_missing_run(store: Store):
+    """A run whose row is gone (unknown id, or its thread was deleted) must stop."""
+    assert await store.is_cancel_requested("no-such-run") is True
+    t = await _thread(store)
+    run = await store.create_run(t.id)
+    assert await store.is_cancel_requested(run.id) is False
+    await store.delete_thread(t.id)
+    assert await store.is_cancel_requested(run.id) is True
+
+
 async def test_events_append_and_list_after_seq(store: Store):
     t = await _thread(store)
     run = await store.create_run(t.id)
