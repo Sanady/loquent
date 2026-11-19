@@ -25,6 +25,7 @@ RateLimiter = Callable[[Request, User | None], Awaitable[bool]]
 
 CSRF_HEADER = "X-Loquent-CSRF"
 MAX_JSON_BYTES = 1024 * 1024
+MAX_DIGITS = 12  # longest numeric header/query value parsed with int()
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 M = TypeVar("M", bound=BaseModel)
@@ -90,6 +91,14 @@ class Deps:
         user = await self.authenticator.current_user(request, self.store)
         if user is None:
             raise ApiError(401, "unauthorized")
+        # Without sessions there is no token to check, but a custom header can't be sent
+        # cross-site without a CORS preflight, so requiring it (any value) blocks such posts.
+        if (
+            not self.password_mode
+            and request.method not in _SAFE_METHODS
+            and CSRF_HEADER not in request.headers
+        ):
+            raise ApiError(403, "csrf")
         if self.password_mode and request.method not in _SAFE_METHODS:
             expected = self.session_csrf(request)
             given = request.headers.get(CSRF_HEADER, "")
@@ -130,7 +139,11 @@ async def json_body(request: Request, model: type[M]) -> M:
     if ctype != "application/json":
         raise ApiError(415, "unsupported_media_type")
     declared = request.headers.get("content-length", "")
-    if declared.isascii() and declared.isdigit() and int(declared) > MAX_JSON_BYTES:
+    if (
+        declared.isascii()
+        and declared.isdigit()
+        and (len(declared) > MAX_DIGITS or int(declared) > MAX_JSON_BYTES)
+    ):
         raise invalid_input()
     chunks: list[bytes] = []
     size = 0

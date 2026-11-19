@@ -9,6 +9,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from urllib.parse import quote
 
+from python_multipart.exceptions import MultipartParseError
 from python_multipart.multipart import MultipartParser, parse_options_header
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -18,13 +19,15 @@ from loquent.files import FileTooLarge, sign_file_url, verify_file_sig
 from loquent.protocol import new_id
 from loquent.store.models import FileMeta
 
-from .deps import ApiError, Deps, invalid_input, not_found
+from .deps import MAX_DIGITS, ApiError, Deps, invalid_input, not_found
 
 log = logging.getLogger("loquent.server")
 
 MAX_NAME_CHARS = 255
 # Allowance for multipart framing and headers on top of the file itself.
 FRAMING_SLACK = 64 * 1024
+MAX_HEADER_BYTES = 8 * 1024
+MAX_HEADERS = 16
 INLINE_TYPES = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp"})
 
 
@@ -59,6 +62,10 @@ class _Upload:
         self._hvalue = b""
         self._headers: dict[bytes, bytes] = {}
         self._in_file = False
+        self._ended = False
+        self._validated = False
+        self._header_bytes = 0
+        self._header_count = 0
         self._parser = MultipartParser(
             boundary,
             {
@@ -73,6 +80,9 @@ class _Upload:
         )
 
     def _append(self, attr: str, data: bytes) -> None:
+        self._header_bytes += len(data)
+        if self._header_bytes > MAX_HEADER_BYTES:
+            raise invalid_input()
         setattr(self, attr, getattr(self, attr) + data)
 
     def _part_begin(self) -> None:
@@ -82,6 +92,9 @@ class _Upload:
         self._headers = {}
 
     def _header_end(self) -> None:
+        self._header_count += 1
+        if self._header_count > MAX_HEADERS:
+            raise invalid_input()
         self._headers[self._hfield.lower()] = self._hvalue
         self._hfield = self._hvalue = b""
 
@@ -96,6 +109,7 @@ class _Upload:
         if self.content_type not in self.allowed:
             raise ApiError(415, "unsupported_media_type")
         self._in_file = True
+        self._validated = True
 
     def _part_data(self, data: bytes, start: int, end: int) -> None:
         if self._in_file:
@@ -103,6 +117,7 @@ class _Upload:
 
     def _part_end(self) -> None:
         self._in_file = False
+        self._ended = True
 
     def _drain(self) -> list[bytes]:
         out, self._buf = self._buf, []
@@ -114,12 +129,19 @@ class _Upload:
             total += len(chunk)
             if total > self.max_bytes + FRAMING_SLACK:
                 raise too_large()
-            self._parser.write(chunk)
+            try:
+                self._parser.write(chunk)
+            except MultipartParseError:
+                raise invalid_input() from None
             for piece in self._drain():
                 if piece:
                     yield piece
-        self._parser.finalize()
-        if self._parts != 1:
+        try:
+            self._parser.finalize()
+        except MultipartParseError:
+            raise invalid_input() from None
+        # Exactly one part, validated, and closed by its boundary (not a truncated body).
+        if self._parts != 1 or not self._validated or not self._ended:
             raise invalid_input()
 
 
@@ -140,8 +162,11 @@ def routes(deps: Deps) -> list[Route]:
         if ctype != b"multipart/form-data" or not boundary:
             raise ApiError(415, "unsupported_media_type")
         declared = request.headers.get("content-length", "")
-        if declared.isascii() and declared.isdigit() and int(declared) > max_bytes + FRAMING_SLACK:
-            raise too_large()
+        if declared.isascii() and declared.isdigit():
+            if len(declared) > MAX_DIGITS:
+                raise invalid_input()
+            if int(declared) > max_bytes + FRAMING_SLACK:
+                raise too_large()
 
         up = _Upload(request, allowed, max_bytes, boundary)
         file_id = new_id()
@@ -170,7 +195,7 @@ def routes(deps: Deps) -> list[Route]:
         file_id = request.path_params["file_id"]
         exp_raw = request.query_params.get("exp", "")
         sig = request.query_params.get("sig", "")
-        if not (exp_raw.isascii() and exp_raw.isdigit()) or not sig:
+        if not (exp_raw.isascii() and exp_raw.isdigit()) or len(exp_raw) > MAX_DIGITS or not sig:
             raise forbidden()
         if not verify_file_sig(
             file_id, int(exp_raw), sig, settings.effective_secret(), int(time.time())
@@ -194,7 +219,16 @@ def routes(deps: Deps) -> list[Route]:
             },
         )
 
+    async def fresh_url(request: Request) -> JSONResponse:
+        user = await deps.user(request)
+        meta = await store.get_file_meta(request.path_params["file_id"])
+        if meta is None or meta.owner_id != user.id:
+            raise not_found()
+        url = sign_file_url(meta.id, settings.effective_secret(), int(time.time()))
+        return JSONResponse({"url": url})
+
     return [
         Route("/api/files", upload, methods=["POST"]),
+        Route("/api/files/{file_id}/url", fresh_url, methods=["GET"]),
         Route("/api/files/{file_id}", download, methods=["GET"]),
     ]

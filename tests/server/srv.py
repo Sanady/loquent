@@ -45,6 +45,8 @@ async def make_client(
         adapter or FunctionAdapter(agent), settings, store, file_store, authenticator, rate_limiter
     )
     async with app.router.lifespan_context(app), new_client(app, base_url=base_url) as client:
+        if settings.auth != "password":
+            client.headers["X-Loquent-CSRF"] = ""  # auth=none still needs the header present
         client.app = app
         client.store = store
         yield client

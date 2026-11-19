@@ -264,3 +264,97 @@ def test_sanitize_name():
     assert sanitize_name("..") == "file"
     assert sanitize_name("dir/") == "file"
     assert len(sanitize_name("a" * 1000)) == 255
+
+
+def _multipart(body: bytes):
+    return {"content-type": "multipart/form-data; boundary=BB", "x-loquent-csrf": ""}, body
+
+
+_HEAD = (
+    b'--BB\r\nContent-Disposition: form-data; name="file"; filename="a.txt"\r\n'
+    b"Content-Type: text/plain\r\n\r\n"
+)
+
+
+async def test_malformed_multipart_is_400_and_leaves_nothing(tmp_path):
+    fs = LocalFileStore(tmp_path)
+    cases = {
+        "garbage": b"\x00\x01\x02 not multipart at all",
+        "truncated_mid_data": _HEAD + b"some data but no closing boundary",
+        "truncated_mid_headers": b'--BB\r\nContent-Disposition: form-data; name="file"; file',
+        "truncated_after_headers": _HEAD,
+        "empty": b"",
+        "header_section_too_big": (
+            b'--BB\r\nContent-Disposition: form-data; name="file"; filename="a.txt"\r\n'
+            + b"X-Pad: " + b"a" * 9000 + b"\r\nContent-Type: text/plain\r\n\r\nx\r\n--BB--\r\n"
+        ),
+        "too_many_headers": (
+            b'--BB\r\nContent-Disposition: form-data; name="file"; filename="a.txt"\r\n'
+            + b"".join(b"X-%d: 1\r\n" % i for i in range(20))
+            + b"Content-Type: text/plain\r\n\r\nx\r\n--BB--\r\n"
+        ),
+    }  # fmt: skip
+    async with make_client(file_store=fs) as c:
+        for name, body in cases.items():
+            headers, content = _multipart(body)
+            r = await c.post("/api/files", content=content, headers=headers)
+            assert r.status_code == 400, (name, r.status_code, r.text)
+            assert r.json() == {"error": "invalid_input"}, name
+            assert os.listdir(tmp_path) == [], name
+        headers, content = _multipart(_HEAD + b"ok\r\n--BB--\r\n")
+        assert (await c.post("/api/files", content=content, headers=headers)).status_code == 200
+
+
+async def test_auth_none_requires_csrf_header_on_all_posts(tmp_path):
+    fs = LocalFileStore(tmp_path)
+    async with make_client(file_store=fs) as c:
+        run = await c.post("/api/runs", json={"input": {"type": "message", "content": "hi"}})
+        rid = sse_events(run)[0]["runId"]
+        async with new_client(c.app) as bare:  # no header: what a cross-site form would send
+            r = await upload(bare)
+            assert r.status_code == 403
+            assert r.json() == {"error": "csrf"}
+            assert os.listdir(tmp_path) == []
+            r = await bare.post(f"/api/runs/{rid}/cancel")
+            assert r.status_code == 403
+            assert r.json() == {"error": "csrf"}
+            r = await bare.post("/api/runs", json={"input": {"type": "message", "content": "x"}})
+            assert r.status_code == 403
+            assert (await bare.get("/api/threads")).status_code == 200  # GET is unaffected
+        # present but empty is enough
+        assert (await upload(c, headers={"X-Loquent-CSRF": ""})).status_code == 200
+        assert (await c.post(f"/api/runs/{rid}/cancel")).status_code == 202
+
+
+async def test_exp_with_huge_digit_string_is_403(tmp_path):
+    fs = LocalFileStore(tmp_path)
+    async with make_client(file_store=fs) as c:
+        meta = (await upload(c)).json()
+        sig = meta["url"].split("sig=")[1]
+        r = await c.get(f"/api/files/{meta['id']}?exp={'9' * 5000}&sig={sig}")
+        assert r.status_code == 403
+        assert r.json() == {"error": "forbidden"}
+
+
+async def test_fresh_url_for_owner_only(tmp_path):
+    fs = LocalFileStore(tmp_path)
+    async with make_client(file_store=fs, settings=password_settings()) as a:
+        await add_user(a, "alice")
+        await add_user(a, "bob")
+        csrf_a = await login(a, "alice")
+        async with new_client(a.app) as b:
+            await login(b, "bob")
+            f = (await upload(a, b"mine", headers={"X-Loquent-CSRF": csrf_a})).json()
+            r = await a.get(f"/api/files/{f['id']}/url")
+            assert r.status_code == 200
+            async with new_client(a.app) as anon:
+                g = await anon.get(rel(r.json()["url"]))
+            assert g.status_code == 200 and g.content == b"mine"
+            for fid in (f["id"], "f" * 32):
+                r = await b.get(f"/api/files/{fid}/url")
+                assert r.status_code == 404
+                assert r.json() == {"error": "not_found"}
+            async with new_client(a.app) as anon:
+                assert (await anon.get(f"/api/files/{f['id']}/url")).status_code == 401
+        r = await a.get(f"/api/files/{'e' * 32}/url")
+        assert r.status_code == 404
