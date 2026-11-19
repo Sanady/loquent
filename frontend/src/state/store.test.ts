@@ -502,4 +502,87 @@ describe("store", () => {
     expect(order).toEqual(["delete"]);
     expect(s.getState().currentThreadId).toBe("b");
   });
+
+  it("answer after RUN_FINISHED starts a run while threads() is still pending", async () => {
+    const startRun = vi.fn((_b: RunBody) => stream(seqd([started("r2"), { type: "RUN_FINISHED" }])));
+    let threadsCalls = 0;
+    const api = fakeApi({
+      startRun,
+      threads: vi.fn(() => {
+        threadsCalls++;
+        if (threadsCalls > 1) return Promise.resolve([]);
+        return new Promise(() => undefined); // first call never resolves: stalled network
+      }),
+    });
+    const s = createAppStore(api);
+    const first = s.getState().send("hi", []);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(threadsCalls).toBe(1);
+    expect(s.getState().view.run).toBe("idle");
+    const ok = await s.getState().answer("c1", { ok: true });
+    expect(ok).toBe(true);
+    expect(startRun).toHaveBeenCalledTimes(2);
+    void first;
+  });
+
+  it("send/answer/regenerate resolve false when refused and starting is exposed", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const api = fakeApi({
+      startRun: vi.fn(() =>
+        (async function* () {
+          await gate;
+          yield* seqd([started(), { type: "RUN_FINISHED" }]);
+        })(),
+      ),
+    });
+    const s = createAppStore(api);
+    const p = s.getState().send("a", []);
+    expect(s.getState().starting).toBe(true);
+    expect(await s.getState().send("b", [])).toBe(false);
+    expect(await s.getState().regenerate()).toBe(false);
+    release();
+    expect(await p).toBe(true);
+    expect(s.getState().starting).toBe(false);
+  });
+
+  it("stop before RUN_STARTED aborts the POST, and a later send works", async () => {
+    const signals: AbortSignal[] = [];
+    const api = fakeApi({
+      startRun: vi.fn((_b: RunBody, signal?: AbortSignal) => {
+        signals.push(signal as AbortSignal);
+        if (signals.length === 1)
+          return (async function* () {
+            await new Promise((_r, rej) => signal!.addEventListener("abort", () => rej(new DOMException("x", "AbortError"))));
+            yield* [] as StreamedEvent[];
+          })();
+        return stream(seqd([started("r2"), { type: "RUN_FINISHED" }]));
+      }),
+    });
+    const s = createAppStore(api);
+    const p = s.getState().send("a", []);
+    await vi.advanceTimersByTimeAsync(0);
+    await s.getState().stop();
+    expect(signals[0].aborted).toBe(true);
+    expect(await p).toBe(false);
+    expect(s.getState().starting).toBe(false);
+    expect(s.getState().view.items).toEqual([]);
+    expect(await s.getState().send("b", [])).toBe(true);
+    expect(api.startRun).toHaveBeenCalledTimes(2);
+  });
+
+  it("a send during openThread's fetch is refused and not overwritten", async () => {
+    let resolveThread!: (v: unknown) => void;
+    const api = fakeApi({
+      thread: vi.fn(() => new Promise((r) => (resolveThread = r))),
+      startRun: vi.fn(() => stream(seqd([started(), { type: "RUN_FINISHED" }]))),
+    });
+    const s = createAppStore(api);
+    const open = s.getState().openThread("t1");
+    expect(await s.getState().send("hi", [])).toBe(false);
+    resolveThread({ thread: { id: "t1", title: "x", updated_at: "" }, events: [], last_run: null });
+    await open;
+    expect(api.startRun).not.toHaveBeenCalled();
+    expect(await s.getState().send("hi", [])).toBe(true);
+  });
 });

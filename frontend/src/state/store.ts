@@ -40,6 +40,8 @@ export interface AppState {
   currentThreadId: string | null;
   view: ThreadView;
   notice: string | null;
+  /** True while a run is being started (upload or POST in flight, before the first event). */
+  starting: boolean;
 
   init(): Promise<void>;
   login(username: string, password: string): Promise<void>;
@@ -49,9 +51,10 @@ export interface AppState {
   deleteThread(id: string): Promise<void>;
   openThread(id: string): Promise<void>;
   newThread(): void;
-  send(text: string, files: (File | Attachment)[]): Promise<void>;
-  answer(toolCallId: string, value: unknown): Promise<void>;
-  regenerate(): Promise<void>;
+  /** send/answer/regenerate resolve true if a run was started, false if refused or it did not start. */
+  send(text: string, files: (File | Attachment)[]): Promise<boolean>;
+  answer(toolCallId: string, value: unknown): Promise<boolean>;
+  regenerate(): Promise<boolean>;
   stop(): Promise<void>;
 }
 
@@ -159,17 +162,17 @@ export function createAppStore(
       }
     }
 
-    async function consume(body: RunBody, myGen: number) {
-      const ac = new AbortController();
-      abort = ac;
+    /** Resolves true once the server accepted the run (first event received). */
+    async function consume(body: RunBody, myGen: number, ac: AbortController, release: () => void): Promise<boolean> {
       let terminal = false;
       let first = true;
       try {
         for await (const { seq, event } of api.startRun(body, ac.signal)) {
-          if (myGen !== gen) return;
+          if (myGen !== gen || ac.signal.aborted) return false;
           if (first) {
             // The server accepted the run: only now start a fresh seq space.
             first = false;
+            set({ starting: false });
             setView((v) => ({ ...v, lastSeq: 0, runId: undefined }));
           }
           setView((v) => applyEvent(v, event, seq));
@@ -178,33 +181,51 @@ export function createAppStore(
           if (event.type === "RUN_STARTED" && tid && get().currentThreadId === null) set({ currentThreadId: tid });
         }
       } catch (e) {
-        if (myGen !== gen) return;
-        if (e instanceof ApiError) return fail(e, myGen);
+        if (myGen !== gen || ac.signal.aborted) return false;
+        if (e instanceof ApiError) {
+          fail(e, myGen);
+          return false;
+        }
         // anything else is a dropped connection: fall through to polling
       }
-      if (myGen !== gen) return;
+      if (myGen !== gen || ac.signal.aborted) return !first;
       if (!terminal) {
         const runId = get().view.runId;
         if (runId && !first) await poll(runId, myGen);
         else pushError("Connection lost. Please try again.");
       }
+      release(); // the run is over: sends are allowed again before the list refresh
       if (myGen === gen) await get().refreshThreads();
+      return !first;
     }
 
-    /** Run a start flow exclusively. A second start while one is starting or running is a silent no-op. */
-    async function exclusive(fn: (myGen: number, threadId: string | null) => Promise<void>) {
-      if (busyToken !== null || get().view.run === "running") return;
+    type Flow = (myGen: number, threadId: string | null, ac: AbortController, release: () => void) => Promise<boolean>;
+
+    /** Run a start flow exclusively. A second start while one is starting or running is a refused no-op (false). */
+    async function exclusive(fn: Flow): Promise<boolean> {
+      if (busyToken !== null || get().view.run === "running") return false;
       const token = ++runToken;
       busyToken = token;
+      const ac = new AbortController();
+      abort = ac;
+      set({ starting: true });
+      const release = () => {
+        if (busyToken === token) {
+          busyToken = null;
+          set({ starting: false });
+        }
+      };
       try {
-        await fn(gen, get().currentThreadId);
+        return await fn(gen, get().currentThreadId, ac, release);
       } finally {
-        if (busyToken === token) busyToken = null;
+        release();
       }
     }
 
-    const startRunFlow = (input: RunBody["input"]) => (myGen: number, threadId: string | null) =>
-      consume({ thread_id: threadId, input, page_query: pageQuery() }, myGen);
+    const startRunFlow =
+      (input: RunBody["input"]): Flow =>
+      (myGen, threadId, ac, release) =>
+        consume({ thread_id: threadId, input, page_query: pageQuery() }, myGen, ac, release);
 
     async function waitNotRunning(id: string): Promise<void> {
       if (get().currentThreadId === id) {
@@ -242,6 +263,7 @@ export function createAppStore(
       currentThreadId: null,
       view: emptyView(),
       notice: null,
+      starting: false,
 
       async init() {
         try {
@@ -274,7 +296,7 @@ export function createAppStore(
         gen++;
         busyToken = null;
         abort?.abort();
-        set({ user: null, threads: [], currentThreadId: null, view: emptyView() });
+        set({ user: null, threads: [], currentThreadId: null, view: emptyView(), starting: false });
       },
 
       async refreshThreads() {
@@ -325,16 +347,22 @@ export function createAppStore(
 
       async openThread(id) {
         const myGen = ++gen;
-        busyToken = null;
         abort?.abort();
-        set({ currentThreadId: id, view: emptyView() });
+        const token = ++runToken;
+        busyToken = token; // hold the guard while the thread loads
+        const unhold = () => {
+          if (busyToken === token) busyToken = null;
+        };
+        set({ currentThreadId: id, view: emptyView(), starting: false });
         let detail;
         try {
           detail = await api.thread(id);
         } catch (e) {
+          unhold();
           fail(e, myGen);
           return;
         }
+        unhold();
         if (myGen !== gen) return;
         let view = applyEvents(emptyView(), detail.events);
         const lr = detail.last_run;
@@ -350,20 +378,20 @@ export function createAppStore(
         gen++;
         busyToken = null;
         abort?.abort();
-        set({ currentThreadId: null, view: emptyView() });
+        set({ currentThreadId: null, view: emptyView(), starting: false });
       },
 
       send: (text, files) =>
-        exclusive(async (myGen, threadId) => {
+        exclusive(async (myGen, threadId, ac, release) => {
           let ids: string[];
           try {
             ids = await Promise.all(files.map(async (f) => (f instanceof File ? (await api.upload(f)).id : f.id)));
           } catch (e) {
-            fail(e, myGen);
-            return;
+            if (!ac.signal.aborted) fail(e, myGen);
+            return false;
           }
-          if (myGen !== gen || get().currentThreadId !== threadId) return;
-          await startRunFlow({ type: "message", content: text, attachments: ids })(myGen, threadId);
+          if (myGen !== gen || ac.signal.aborted || get().currentThreadId !== threadId) return false;
+          return startRunFlow({ type: "message", content: text, attachments: ids })(myGen, threadId, ac, release);
         }),
 
       answer: (toolCallId, value) =>
@@ -371,6 +399,13 @@ export function createAppStore(
       regenerate: () => exclusive(startRunFlow({ type: "regenerate" })),
 
       async stop() {
+        if (get().starting) {
+          // Still starting: abort the pending upload/POST and free the guard.
+          abort?.abort();
+          busyToken = null;
+          set({ starting: false });
+          return;
+        }
         const { runId, run: state } = get().view;
         if (!runId || state !== "running") return;
         try {
