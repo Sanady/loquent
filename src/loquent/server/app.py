@@ -6,7 +6,6 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING
 
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
@@ -17,10 +16,11 @@ from starlette.routing import BaseRoute, Mount
 
 from loquent.adapters.base import Adapter
 from loquent.auth import Authenticator, SessionManager
+from loquent.files import FileStore
 from loquent.settings import Settings
 from loquent.store.base import Store
 
-from . import routes_auth, routes_meta, routes_runs, routes_threads
+from . import routes_auth, routes_files, routes_meta, routes_runs, routes_threads
 from .deps import (
     CSRF_HEADER,
     ApiError,
@@ -30,9 +30,6 @@ from .deps import (
     http_error_handler,
 )
 from .security import SecurityHeadersMiddleware
-
-if TYPE_CHECKING:
-    from loquent.files import FileStore
 
 log = logging.getLogger("loquent.server")
 
@@ -75,6 +72,8 @@ def create_app(
         *routes_threads.routes(deps),
         *routes_runs.routes(deps),
     ]
+    if file_store is not None:
+        routes.extend(routes_files.routes(deps))  # without a store: 404 not_found
     if root_path:
         routes = [Mount(root_path, routes=routes)]
 

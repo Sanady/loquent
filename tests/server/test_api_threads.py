@@ -9,6 +9,8 @@ from srv import (
     started,
 )
 
+from loquent.files import LocalFileStore
+
 
 def widget_agent(messages, ctx):
     from loquent import ui
@@ -64,9 +66,11 @@ async def test_thread_view_shape():
         assert body["events"] == ev  # plain event dicts, same as streamed
 
 
-async def test_other_users_thread_run_file_are_404():
+async def test_other_users_thread_run_file_are_404(tmp_path):
     """Review Focus 1: another signed-in user's ids are 404 everywhere (file case: Task 10)."""
-    async with make_client(widget_agent, settings=password_settings()) as a:
+    async with make_client(
+        widget_agent, settings=password_settings(), file_store=LocalFileStore(tmp_path)
+    ) as a:
         await add_user(a, "alice")
         await add_user(a, "bob")
         csrf_a = await login(a, "alice")
@@ -77,8 +81,21 @@ async def test_other_users_thread_run_file_are_404():
             tid, rid = started(ev)["threadId"], started(ev)["runId"]
             call_id = next(e["toolCallId"] for e in ev if e["type"] == "TOOL_CALL_START")
 
+            up = await b.post(
+                "/api/files", files={"file": ("s.txt", b"bob's file", "text/plain")}, headers=hb
+            )
+            assert up.status_code == 200
+            fid = up.json()["id"]
+
             ha = {"X-Loquent-CSRF": csrf_a}
             checks = [
+                ("POST", "/api/runs", {
+                    "input": {"type": "message", "content": "hi", "attachments": [fid]},
+                }),
+                ("POST", "/api/runs", {
+                    "thread_id": tid,
+                    "input": {"type": "message", "content": "hi", "attachments": [fid]},
+                }),
                 ("GET", f"/api/threads/{tid}", None),
                 ("PATCH", f"/api/threads/{tid}", {"title": "pwned"}),
                 ("DELETE", f"/api/threads/{tid}", None),
@@ -110,6 +127,14 @@ async def test_other_users_thread_run_file_are_404():
                 assert r.status_code == 404  # not 409, and no orphan run is created
                 assert r.json() == {"error": "not_found"}
                 assert await a.store.list_runs("nope") == []
+
+            # a file id that doesn't exist looks the same as bob's
+            r = await a.post(
+                "/api/runs",
+                headers=ha,
+                json={"input": {"type": "message", "content": "hi", "attachments": ["f" * 32]}},
+            )
+            assert r.status_code == 404 and r.json() == {"error": "not_found"}
 
             # alice sees nothing of bob's, and bob's data is untouched
             assert (await a.get("/api/threads")).json() == []

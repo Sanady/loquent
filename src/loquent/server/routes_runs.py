@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import AsyncIterator
+from functools import partial
 from typing import Annotated, Any, Literal
 
 from ag_ui.core import (
@@ -20,17 +21,18 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, StreamingResponse
 from starlette.routing import Route
 
-from loquent.context import RunContext
+from loquent.context import FileRef, RunContext
 from loquent.protocol import encode_sse, event_to_dict, events_to_messages, new_id
 from loquent.runner import GENERIC_ERROR, STALE_AFTER_S, effective_status, start_run
 from loquent.store.models import Run, RunInProgress, Thread, User
 from loquent.ui import WIDGET_TOOLS, InvalidAnswer, is_widget_tool, validate_answer
 
-from .deps import ApiError, Deps, invalid_input, json_body, public_user
+from .deps import ApiError, Deps, invalid_input, json_body, not_found, public_user
 
 log = logging.getLogger("loquent.server")
 
 TITLE_CHARS = 60
+MAX_ATTACHMENTS = 10
 MAX_QUERY_KEYS = 20
 MAX_QUERY_BYTES = 1024
 # Never forwarded to the agent, even if an operator lists them.
@@ -75,11 +77,12 @@ def _check_page_query(q: dict[str, str]) -> None:
             raise invalid_input()
 
 
-def message_events(content: str) -> list[BaseEvent]:
+def message_events(content: str, attachments: list[dict] | None = None) -> list[BaseEvent]:
     mid = new_id()
-    # Task 10 fills "attachments" with the public FileMeta fields of resolved attachments.
     return [
-        TextMessageStartEvent(message_id=mid, role="user", metadata={"attachments": []}),
+        TextMessageStartEvent(
+            message_id=mid, role="user", metadata={"attachments": attachments or []}
+        ),
         TextMessageContentEvent(message_id=mid, delta=content),
         TextMessageEndEvent(message_id=mid),
     ]
@@ -176,6 +179,31 @@ def routes(deps: Deps) -> list[Route]:
         except RunInProgress:
             raise ApiError(409, "run_in_progress") from None
 
+    async def resolve_attachments(user: User, ids: list[str]) -> tuple[list[dict], list[FileRef]]:
+        """Public metadata and FileRefs for the message's attachments; all must be the user's."""
+        if not ids:
+            return [], []
+        file_store = deps.file_store
+        if file_store is None or not adapter.supports_attachments or len(ids) > MAX_ATTACHMENTS:
+            raise invalid_input()
+        public: list[dict] = []
+        refs: list[FileRef] = []
+        for file_id in dict.fromkeys(ids):  # in order, without duplicates
+            meta = await store.get_file_meta(file_id)
+            if meta is None or meta.owner_id != user.id:
+                raise not_found()
+            public.append(
+                {"id": meta.id, "name": meta.name, "content_type": meta.content_type,
+                 "size": meta.size}
+            )  # fmt: skip
+            refs.append(
+                FileRef(
+                    id=meta.id, name=meta.name, content_type=meta.content_type, size=meta.size,
+                    read=partial(file_store.read, meta.id),
+                )
+            )  # fmt: skip
+        return public, refs
+
     async def start(request: Request) -> StreamingResponse:
         user = await deps.user(request)
         if deps.rate_limiter is not None and not await deps.rate_limiter(request, user):
@@ -190,14 +218,13 @@ def routes(deps: Deps) -> list[Route]:
             thread = await deps.owned_thread(user, body.thread_id)
 
         input_events: list[BaseEvent] = []
+        files: list[FileRef] = []
         supersede: Run | None = None
         if isinstance(inp, MessageInput):
-            if inp.attachments:
-                # Task 10: resolve attachments (owned by `user`, else 404) into ctx.files.
-                raise invalid_input()
             if not inp.content.strip():
                 raise invalid_input()
-            input_events = message_events(inp.content)
+            attachments, files = await resolve_attachments(user, inp.attachments)
+            input_events = message_events(inp.content, attachments)
             if thread is None:
                 title = inp.content.strip()[:TITLE_CHARS]
                 thread = await store.create_thread(user.id, title)
@@ -253,7 +280,7 @@ def routes(deps: Deps) -> list[Route]:
             )  # fmt: skip
             ctx = RunContext(
                 thread_id=thread.id, run_id=run.id, user=user, messages=messages,
-                forwarded_props=fp, files=[],
+                forwarded_props=fp, files=files,
             )  # fmt: skip
             handle = start_run(
                 store=store, adapter=adapter, run=run, input=agent_input, ctx=ctx,

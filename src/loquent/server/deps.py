@@ -6,7 +6,7 @@ import hmac
 import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 from starlette.exceptions import HTTPException
@@ -15,13 +15,11 @@ from starlette.responses import JSONResponse, Response
 
 from loquent.adapters.base import Adapter
 from loquent.auth import SESSION_COOKIE, Authenticator, SessionManager
+from loquent.files import FileStore
 from loquent.runner import RunHandle
 from loquent.settings import Settings
 from loquent.store.base import Store
 from loquent.store.models import Run, Thread, User
-
-if TYPE_CHECKING:
-    from loquent.files import FileStore
 
 RateLimiter = Callable[[Request, User | None], Awaitable[bool]]
 

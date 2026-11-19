@@ -31,6 +31,7 @@ async def make_client(
     settings: Settings | None = None,
     authenticator=None,
     rate_limiter=None,
+    file_store=None,
     base_url: str = "http://test",
 ):
     settings = settings or Settings()
@@ -41,7 +42,7 @@ async def make_client(
         else:
             authenticator = NoAuth()
     app = create_app(
-        adapter or FunctionAdapter(agent), settings, store, None, authenticator, rate_limiter
+        adapter or FunctionAdapter(agent), settings, store, file_store, authenticator, rate_limiter
     )
     async with app.router.lifespan_context(app), new_client(app, base_url=base_url) as client:
         client.app = app
