@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
     root_path: str = ""
+    forwarded_allow_ips: list[str] = ["127.0.0.1"]
 
     # storage
     store_url: str = "sqlite:///./loquent.db"

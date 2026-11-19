@@ -1,0 +1,140 @@
+import httpx
+from fastapi import FastAPI
+from starlette.applications import Starlette
+from starlette.routing import Mount
+
+from loquent import App, serve
+from loquent.server import static as static_mod
+from loquent.settings import Settings
+
+MISSING = "UI assets missing: build with `npm run build` in frontend/"
+
+
+def echo(messages):
+    return f"echo: {messages[-1].content}"
+
+
+def client_for(app):
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
+
+
+def fake_ui(tmp_path, monkeypatch):
+    d = tmp_path / "static"
+    (d / "assets").mkdir(parents=True)
+    (d / "index.html").write_text("<html><head><title>x</title></head><body></body></html>")
+    (d / "assets" / "a.js").write_text("console.log(1)")
+    monkeypatch.setattr(static_mod, "STATIC_DIR", d)
+    return d
+
+
+def settings(tmp_path, **kw):
+    return Settings(store_url=f"sqlite:///{tmp_path}/t.db", files_dir=str(tmp_path / "f"), **kw)
+
+
+async def test_missing_ui_returns_503_message(tmp_path, monkeypatch):
+    monkeypatch.setattr(static_mod, "STATIC_DIR", tmp_path / "nope")
+    app = App(echo, settings=settings(tmp_path))
+    async with app.lifespan(), client_for(app) as c:
+        r = await c.get("/")
+        assert r.status_code == 503
+        assert r.text == MISSING
+        assert (await c.get("/healthz")).json() == {"status": "ok"}
+
+
+async def test_index_injects_base_href(tmp_path, monkeypatch):
+    fake_ui(tmp_path, monkeypatch)
+    app = App(echo, settings=settings(tmp_path))
+    async with app.lifespan(), client_for(app) as c:
+        r = await c.get("/")
+        assert r.status_code == 200
+        assert '<head><base href="/">' in r.text
+        r = await c.get("/some/spa/route")
+        assert '<base href="/">' in r.text
+        assert (await c.get("/assets/a.js")).text == "console.log(1)"
+        r = await c.get("/api/nope")
+        assert r.status_code == 404 and r.json() == {"error": "not_found"}
+        assert (await c.get("/branding/logo")).status_code == 404
+        assert (await c.get("/branding/custom.css")).status_code == 404
+        assert (await c.get("/assets/../index.html")).status_code in (200, 404)
+
+
+async def test_base_href_with_settings_root_path(tmp_path, monkeypatch):
+    fake_ui(tmp_path, monkeypatch)
+    app = App(echo, settings=settings(tmp_path, root_path="/chat"))
+    async with app.lifespan(), client_for(app) as c:
+        assert '<base href="/chat/">' in (await c.get("/chat/")).text
+        assert (await c.get("/chat/healthz")).status_code == 200
+
+
+async def test_branding_files(tmp_path, monkeypatch):
+    fake_ui(tmp_path, monkeypatch)
+    (tmp_path / "l.png").write_bytes(b"\x89PNG")
+    (tmp_path / "c.css").write_text("body{}")
+    app = App(
+        echo,
+        settings=settings(
+            tmp_path, logo_path=tmp_path / "l.png", custom_css_path=tmp_path / "c.css"
+        ),
+    )
+    async with app.lifespan(), client_for(app) as c:
+        assert (await c.get("/branding/logo")).content == b"\x89PNG"
+        r = await c.get("/branding/custom.css")
+        assert r.text == "body{}" and "css" in r.headers["content-type"]
+        assert (await c.get("/api/config")).json()["logo_url"] == "branding/logo"
+
+
+async def test_app_mounts_inside_fastapi_or_starlette_under_prefix(tmp_path, monkeypatch):
+    fake_ui(tmp_path, monkeypatch)
+    for outer in (
+        Starlette(routes=[Mount("/chat", app=App(echo, settings=settings(tmp_path)))]),
+        _fastapi(tmp_path),
+    ):
+        async with client_for(outer) as c:
+            assert (await c.get("/chat/healthz")).json() == {"status": "ok"}
+            r = await c.get("/chat/")
+            assert '<base href="/chat/">' in r.text
+            assert (await c.get("/chat/assets/a.js")).status_code == 200
+            assert (await c.get("/chat/api/config")).status_code == 200
+            assert (await c.get("/chat/api/zzz")).status_code == 404
+
+
+def _fastapi(tmp_path):
+    (tmp_path / "x").mkdir()
+    outer = FastAPI()
+    outer.mount("/chat", App(echo, settings=settings(tmp_path / "x")))
+    return outer
+
+
+async def test_overrides_and_injected_layers(tmp_path):
+    s = settings(tmp_path)
+    app = App(echo, settings=s, app_name="Hi")
+    assert app.settings.app_name == "Hi" and s.app_name == "Chat"
+    app2 = App(echo, app_name="Yo", store_url=f"sqlite:///{tmp_path}/u.db")
+    assert app2.settings.app_name == "Yo"
+
+
+def test_serve_passes_proxy_options_to_uvicorn(monkeypatch, tmp_path):
+    import uvicorn
+
+    calls = {}
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kw: calls.update(app=app, **kw))
+    serve(
+        echo,
+        port=9123,
+        forwarded_allow_ips=["10.0.0.1", "10.0.0.2"],
+        store_url=f"sqlite:///{tmp_path}/s.db",
+    )
+    assert calls["proxy_headers"] is True
+    assert calls["forwarded_allow_ips"] == "10.0.0.1,10.0.0.2"
+    assert calls["port"] == 9123 and calls["host"] == "127.0.0.1"
+
+
+def test_serve_refuses_public_bind_without_auth(monkeypatch):
+    import pytest
+    import uvicorn
+
+    from loquent.auth import InsecureConfigError
+
+    monkeypatch.setattr(uvicorn, "run", lambda *a, **k: None)
+    with pytest.raises(InsecureConfigError):
+        serve(echo, host="0.0.0.0")

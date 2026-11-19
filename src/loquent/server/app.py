@@ -20,7 +20,7 @@ from loquent.files import FileStore
 from loquent.settings import Settings
 from loquent.store.base import Store
 
-from . import routes_auth, routes_files, routes_meta, routes_runs, routes_threads
+from . import routes_auth, routes_files, routes_meta, routes_runs, routes_threads, static
 from .deps import (
     CSRF_HEADER,
     ApiError,
@@ -74,6 +74,7 @@ def create_app(
     ]
     if file_store is not None:
         routes.extend(routes_files.routes(deps))  # without a store: 404 not_found
+    routes.extend(static.routes(settings))  # last: /api and /healthz keep priority
     if root_path:
         routes = [Mount(root_path, routes=routes)]
 

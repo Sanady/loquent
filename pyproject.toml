@@ -16,6 +16,9 @@ dependencies = [
     "python-multipart>=0.0.34",
 ]
 
+[project.scripts]
+loquent = "loquent.cli:main"
+
 [project.optional-dependencies]
 mongo = [
     "pymongo>=4.9",
