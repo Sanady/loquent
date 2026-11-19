@@ -2,11 +2,18 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Loquent</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Chat</title>
+    <script type="module" src="./src/main.tsx"></script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <!--
+      Optional operator stylesheet (404 when not configured). It sits in <body> so it comes
+      after the app CSS in document order, both in the build (CSS link in <head>) and in dev
+      (<style> tags appended to <head>), and can therefore override anything.
+    -->
+    <link rel="stylesheet" href="branding/custom.css" />
   </body>
 </html>

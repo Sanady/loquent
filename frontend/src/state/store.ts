@@ -51,7 +51,13 @@ export interface AppState {
   deleteThread(id: string): Promise<void>;
   openThread(id: string): Promise<void>;
   newThread(): void;
-  /** send/answer/regenerate resolve true if a run was started, false if refused or it did not start. */
+  /**
+   * send/answer/regenerate return a promise that settles when the run ENDS (stream finished,
+   * polling reached a terminal status, or the user switched threads). It resolves true if the
+   * server accepted the run, false otherwise. A refused call (another run starting or running)
+   * resolves false immediately without touching `starting`; an accepted one flips `starting`
+   * true synchronously, which is how the composer knows the send was taken.
+   */
   send(text: string, files: (File | Attachment)[]): Promise<boolean>;
   answer(toolCallId: string, value: unknown): Promise<boolean>;
   regenerate(): Promise<boolean>;
@@ -162,13 +168,16 @@ export function createAppStore(
       }
     }
 
-    /** Resolves true once the server accepted the run (first event received). */
+    /**
+     * Consume a run's stream, falling back to polling if the connection drops. Settles when the
+     * run ends; resolves true if the server accepted the run (first event received), else false.
+     */
     async function consume(body: RunBody, myGen: number, ac: AbortController, release: () => void): Promise<boolean> {
       let terminal = false;
       let first = true;
       try {
         for await (const { seq, event } of api.startRun(body, ac.signal)) {
-          if (myGen !== gen || ac.signal.aborted) return false;
+          if (myGen !== gen || ac.signal.aborted) return !first;
           if (first) {
             // The server accepted the run: only now start a fresh seq space.
             first = false;
@@ -181,7 +190,7 @@ export function createAppStore(
           if (event.type === "RUN_STARTED" && tid && get().currentThreadId === null) set({ currentThreadId: tid });
         }
       } catch (e) {
-        if (myGen !== gen || ac.signal.aborted) return false;
+        if (myGen !== gen || ac.signal.aborted) return !first;
         if (e instanceof ApiError) {
           fail(e, myGen);
           return false;

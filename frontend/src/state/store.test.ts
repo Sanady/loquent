@@ -585,4 +585,24 @@ describe("store", () => {
     expect(api.startRun).not.toHaveBeenCalled();
     expect(await s.getState().send("hi", [])).toBe(true);
   });
+  it("send resolves true (accepted) when the user switches threads mid-run", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const api = fakeApi({
+      startRun: vi.fn(() =>
+        (async function* () {
+          yield { seq: 1, event: started() };
+          await gate;
+          yield { seq: 2, event: { type: "RUN_FINISHED" } as AgUiEvent };
+        })(),
+      ),
+    });
+    const s = createAppStore(api);
+    const p = s.getState().send("hi", []);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(s.getState().view.run).toBe("running");
+    s.getState().newThread();
+    release();
+    await expect(p).resolves.toBe(true);
+  });
 });
