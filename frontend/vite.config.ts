@@ -9,5 +9,6 @@ export default defineConfig({
   build: { outDir: "../src/loquent/server/static", emptyOutDir: true, assetsInlineLimit: 0 },
   server: { proxy: { "/api": "http://127.0.0.1:8000", "/branding": "http://127.0.0.1:8000" } },
   // css.include: theme tests read the real styles.css (?raw) to check the custom-property cascade.
-  test: { environment: "jsdom", globals: false, setupFiles: ["src/test/setup.ts"], css: { include: [/styles\.css/] } },
+  // include: keep Playwright specs in e2e/ out of vitest.
+  test: { include: ["src/**/*.test.{ts,tsx}"], environment: "jsdom", globals: false, setupFiles: ["src/test/setup.ts"], css: { include: [/styles\.css/] } },
 });
