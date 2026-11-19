@@ -7,7 +7,7 @@ import { MessageList } from "./components/MessageList";
 import { ThreadList } from "./components/ThreadList";
 import { appStore, type AppStore } from "./state/store";
 import { StoreProvider, useApp, useAppStore } from "./storeContext";
-import { applyTheme, useColorMode } from "./theme";
+import { applyTheme, useColorMode, type ColorMode } from "./theme";
 
 const NAV_ID = "lq-nav";
 const NARROW = "(max-width: 720px)";
@@ -57,7 +57,7 @@ function Notice() {
   );
 }
 
-function Chat({ mode, onToggleMode }: { mode: "light" | "dark"; onToggleMode: () => void }) {
+function Chat({ mode, onToggleMode }: { mode: ColorMode; onToggleMode: (() => void) | null }) {
   const store = useAppStore();
   const showThreads = useApp((s) => !(s.config?.hide ?? []).includes("thread_list"));
   const items = useApp((s) => s.view.items);
@@ -66,6 +66,9 @@ function Chat({ mode, onToggleMode }: { mode: "light" | "dark"; onToggleMode: ()
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const navOpen = showThreads && (narrow ? drawerOpen : !collapsed);
+  const drawerModal = showThreads && narrow && drawerOpen;
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const wasModal = useRef(false);
 
   const scroller = useRef<HTMLElement>(null);
   const stick = useRef(true);
@@ -116,14 +119,20 @@ function Chat({ mode, onToggleMode }: { mode: "light" | "dark"; onToggleMode: ()
     return () => ro.disconnect();
   }, [following, onScroll]);
 
-  // Narrow drawer: move focus into it on open; Escape closes it.
+  // Narrow drawer is modal: focus moves into it on open, Escape closes it, and focus returns
+  // to the toggle on close. (The rest of the page is inert meanwhile, see below.)
   useEffect(() => {
-    if (!(narrow && drawerOpen)) return;
+    if (!drawerModal) {
+      if (wasModal.current) toggleRef.current?.focus();
+      wasModal.current = false;
+      return;
+    }
+    wasModal.current = true;
     document.querySelector<HTMLElement>(`#${NAV_ID} button`)?.focus();
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setDrawerOpen(false);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [narrow, drawerOpen]);
+  }, [drawerModal]);
 
   const layout = ["lq-layout", showThreads ? "has-nav" : "no-nav", navOpen ? "nav-open" : "nav-closed", narrow ? "is-narrow" : ""]
     .filter(Boolean)
@@ -141,8 +150,9 @@ function Chat({ mode, onToggleMode }: { mode: "light" | "dark"; onToggleMode: ()
         </div>
       )}
       {showThreads && narrow && drawerOpen && <div className="lq-scrim" aria-hidden="true" onClick={() => setDrawerOpen(false)} />}
-      <div className="lq-main">
+      <div className="lq-main" inert={drawerModal}>
         <Header
+          toggleRef={toggleRef}
           navId={showThreads ? NAV_ID : null}
           navOpen={navOpen}
           onToggleNav={() => (narrow ? setDrawerOpen((o) => !o) : setCollapsed((c) => !c))}
@@ -186,7 +196,10 @@ function Shell() {
   }, [store]);
 
   useEffect(load, [load]);
-  useEffect(() => applyTheme(config?.theme), [config?.theme]);
+  // A configured brand background fixes the palette and its scheme in both modes (R25).
+  const [brandScheme, setBrandScheme] = useState<ColorMode | null>(null);
+  useLayoutEffect(() => setBrandScheme(applyTheme(config?.theme).scheme), [config?.theme]);
+  const effectiveMode = brandScheme ?? mode;
   useEffect(() => {
     if (config?.app_name) document.title = config.app_name;
   }, [config?.app_name]);
@@ -207,11 +220,11 @@ function Shell() {
   } else if (needsLogin) {
     body = <Login />;
   } else {
-    body = <Chat mode={mode} onToggleMode={toggleMode} />;
+    body = <Chat mode={effectiveMode} onToggleMode={brandScheme ? null : toggleMode} />;
   }
 
   return (
-    <div className="lq-root" data-mode={mode}>
+    <div className="lq-root" data-mode={effectiveMode}>
       {body}
     </div>
   );

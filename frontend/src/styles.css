@@ -1,8 +1,17 @@
 /*
- * Chat UI styles. Everything is driven by --lq-* variables:
+ * Chat UI styles. Everything is driven by --lq-* variables.
+ *
+ * theme.ts sets these inline on <html> from config.theme:
  *   --lq-accent --lq-background --lq-surface --lq-text --lq-muted --lq-radius --lq-font
- * come from config.theme (set inline on <html>); the rest are derived below.
- * The dark palette replaces background/surface/text/muted; accent, radius and font apply to both.
+ * plus the derived --lq-on-accent (picked by contrast against the accent) and, when a brand
+ * background is configured, --lq-elevated. Defaults for all of them live on :root, so the inline
+ * values win.
+ *
+ * Dark mode: .lq-root[data-mode] carries the effective scheme. The built-in dark palette below
+ * overrides a palette key only if <html data-lq-custom-colors> does not list it. theme.ts lists
+ * all four palette keys when the developer configures `background`, so a brand palette is
+ * never replaced in dark mode (R25).
+ *
  * An operator stylesheet (branding/custom.css) loads after this file and can override anything.
  */
 
@@ -16,12 +25,13 @@
   --lq-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --lq-font-display: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
   --lq-font-mono: ui-monospace, "SFMono-Regular", "Cascadia Code", Menlo, Consolas, "Liberation Mono", monospace;
+  /* derived; theme.ts overrides these inline when the config needs it */
+  --lq-on-accent: #ffffff;
+  --lq-elevated: #ffffff;
 }
 
 .lq-root {
-  --lq-elevated: #ffffff;
   --lq-danger: #b42318;
-  --lq-on-accent: #ffffff;
   --lq-shadow: 0 1px 2px rgb(20 18 14 / 0.04), 0 10px 30px -14px rgb(20 18 14 / 0.22);
   --lq-border: color-mix(in srgb, var(--lq-text) 10%, transparent);
   --lq-border-strong: color-mix(in srgb, var(--lq-text) 17%, transparent);
@@ -33,14 +43,24 @@
 }
 
 .lq-root[data-mode="dark"] {
-  --lq-background: #141513;
-  --lq-surface: #1c1e1b;
-  --lq-text: #e8e6e1;
-  --lq-muted: #a09c93;
-  --lq-elevated: #222420;
   --lq-danger: #f97066;
   --lq-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px -14px rgb(0 0 0 / 0.6);
   color-scheme: dark;
+}
+
+/* Built-in dark palette, one rule per key so a configured (custom) key is never overridden. */
+:root:not([data-lq-custom-colors~="background"]) .lq-root[data-mode="dark"] {
+  --lq-background: #141513;
+  --lq-elevated: #222420;
+}
+:root:not([data-lq-custom-colors~="surface"]) .lq-root[data-mode="dark"] {
+  --lq-surface: #1c1e1b;
+}
+:root:not([data-lq-custom-colors~="text"]) .lq-root[data-mode="dark"] {
+  --lq-text: #e8e6e1;
+}
+:root:not([data-lq-custom-colors~="muted"]) .lq-root[data-mode="dark"] {
+  --lq-muted: #a09c93;
 }
 
 /* ---------- base ---------- */

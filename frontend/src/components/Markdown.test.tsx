@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { Markdown, safeUrl } from "./Markdown";
 
@@ -82,5 +82,13 @@ describe("Markdown", () => {
     const a = container.querySelector("a")!;
     expect(a.getAttribute("target")).toBe("_blank");
     expect(a.getAttribute("rel")).toContain("noopener");
+  });
+  it("an image that fails to load (e.g. CSP-blocked) falls back to its alt text", () => {
+    const { container } = render(<Markdown text={"![quarterly chart](https://cdn.example.com/c.png)"} />);
+    const img = container.querySelector("img")!;
+    expect(img.getAttribute("src")).toBe("https://cdn.example.com/c.png");
+    fireEvent.error(img);
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector(".lq-img-blocked")?.textContent).toBe("quarterly chart");
   });
 });

@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState, type ImgHTMLAttributes } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import rehypeKatex from "rehype-katex";
@@ -37,14 +37,20 @@ function codeLanguage(pre: Element | undefined): string | null {
   return lang ? lang.slice("language-".length) : null;
 }
 
+/** An image that falls back to its alt text if it fails to load (e.g. blocked by the CSP). */
+function SafeImage({ src, alt, ...rest }: ImgHTMLAttributes<HTMLImageElement>) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return <span className="lq-img-blocked">{alt || "Image unavailable"}</span>;
+  return <img {...rest} src={src} alt={alt ?? ""} loading="lazy" onError={() => setFailed(true)} />;
+}
+
 const components: Components = {
   a: ({ node: _node, href, children, ...rest }) => (
     <a {...rest} href={href || undefined} target="_blank" rel="noopener noreferrer">
       {children}
     </a>
   ),
-  img: ({ node: _node, src, alt, ...rest }) =>
-    src ? <img {...rest} src={src} alt={alt ?? ""} loading="lazy" /> : <span className="lq-img-blocked">{alt}</span>,
+  img: ({ node: _node, ...rest }) => <SafeImage {...rest} />,
   pre: ({ node, children }) => {
     const lang = codeLanguage(node);
     return (

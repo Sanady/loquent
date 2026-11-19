@@ -5,6 +5,7 @@ import { afterEach } from "vitest";
 afterEach(() => {
   cleanup();
   document.documentElement.removeAttribute("style");
+  document.documentElement.removeAttribute("data-lq-custom-colors");
   try {
     localStorage.clear();
   } catch {

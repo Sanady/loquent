@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { ThreadSummary } from "../api/client";
 import { useApp } from "../storeContext";
+import { plainTitle } from "../text";
 import { IconPencil, IconPlus, IconTrash, IconX } from "./icons";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -28,7 +29,17 @@ function groupThreads(threads: ThreadSummary[]): [string, ThreadSummary[]][] {
   return [...groups.entries()];
 }
 
-function ThreadRow({ thread, current, onOpened }: { thread: ThreadSummary; current: boolean; onOpened: () => void }) {
+function ThreadRow({
+  thread,
+  current,
+  onOpened,
+  onDeleted,
+}: {
+  thread: ThreadSummary;
+  current: boolean;
+  onOpened: () => void;
+  onDeleted: () => void;
+}) {
   const openThread = useApp((s) => s.openThread);
   const renameThread = useApp((s) => s.renameThread);
   const deleteThread = useApp((s) => s.deleteThread);
@@ -36,13 +47,21 @@ function ThreadRow({ thread, current, onOpened }: { thread: ThreadSummary; curre
   const [draft, setDraft] = useState(thread.title);
   const inputRef = useRef<HTMLInputElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const renameBtn = useRef<HTMLButtonElement>(null);
+  const deleteBtn = useRef<HTMLButtonElement>(null);
+  // Where focus goes when the row returns to view mode after a keyboard-driven exit.
+  const refocus = useRef<"rename" | "delete" | null>(null);
   // Enter/Escape end the edit; the blur that follows unmounting must not commit again.
   const editDone = useRef(false);
-  const title = thread.title || "Untitled chat";
+  const title = plainTitle(thread.title) || "Untitled chat";
 
   useEffect(() => {
     if (mode === "rename") inputRef.current?.select();
     if (mode === "confirm") confirmRef.current?.focus();
+    if (mode === "view" && refocus.current) {
+      (refocus.current === "rename" ? renameBtn : deleteBtn).current?.focus();
+      refocus.current = null;
+    }
   }, [mode]);
 
   const startRename = () => {
@@ -62,11 +81,20 @@ function ThreadRow({ thread, current, onOpened }: { thread: ThreadSummary; curre
   const onRenameKey = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
+      refocus.current = "rename";
       commitRename();
     } else if (e.key === "Escape") {
+      // Cancels the rename only; must not also close the mobile drawer.
+      e.stopPropagation();
       editDone.current = true;
+      refocus.current = "rename";
       setMode("view");
     }
+  };
+
+  const cancelDelete = () => {
+    refocus.current = "delete";
+    setMode("view");
   };
 
   if (mode === "rename") {
@@ -88,15 +116,26 @@ function ThreadRow({ thread, current, onOpened }: { thread: ThreadSummary; curre
 
   if (mode === "confirm") {
     return (
-      <li className="lq-thread is-confirm" role="group" aria-label={`Delete ${title}?`}>
+      <li
+        className="lq-thread is-confirm"
+        role="group"
+        aria-label={`Delete ${title}?`}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            cancelDelete();
+          }
+        }}
+      >
         <span className="lq-thread-confirm-text">Delete this chat?</span>
         <button ref={confirmRef} type="button" className="lq-btn lq-btn-danger lq-btn-sm" aria-label="Confirm delete" onClick={() => {
           setMode("view");
+          onDeleted();
           void deleteThread(thread.id);
         }}>
           Delete
         </button>
-        <button type="button" className="lq-btn lq-btn-quiet lq-btn-sm" onClick={() => setMode("view")}>
+        <button type="button" className="lq-btn lq-btn-quiet lq-btn-sm" onClick={cancelDelete}>
           Cancel
         </button>
       </li>
@@ -118,10 +157,10 @@ function ThreadRow({ thread, current, onOpened }: { thread: ThreadSummary; curre
         {title}
       </button>
       <span className="lq-thread-actions">
-        <button type="button" className="lq-icon-btn lq-icon-btn-sm" aria-label={`Rename ${title}`} title="Rename" onClick={startRename}>
+        <button ref={renameBtn} type="button" className="lq-icon-btn lq-icon-btn-sm" aria-label={`Rename ${title}`} title="Rename" onClick={startRename}>
           <IconPencil />
         </button>
-        <button type="button" className="lq-icon-btn lq-icon-btn-sm" aria-label={`Delete ${title}`} title="Delete" onClick={() => setMode("confirm")}>
+        <button ref={deleteBtn} type="button" className="lq-icon-btn lq-icon-btn-sm" aria-label={`Delete ${title}`} title="Delete" onClick={() => setMode("confirm")}>
           <IconTrash />
         </button>
       </span>
@@ -134,11 +173,12 @@ export function ThreadList({ id, onNavigate, onClose }: { id: string; onNavigate
   const currentId = useApp((s) => s.currentThreadId);
   const newThread = useApp((s) => s.newThread);
   const groups = groupThreads(threads);
+  const newChatRef = useRef<HTMLButtonElement>(null);
 
   return (
     <nav id={id} className="lq-sidebar" aria-label="Chats">
       <div className="lq-sidebar-top">
-        <button type="button" className="lq-new-chat" onClick={() => {
+        <button ref={newChatRef} type="button" className="lq-new-chat" onClick={() => {
           newThread();
           onNavigate();
         }}>
@@ -160,7 +200,13 @@ export function ThreadList({ id, onNavigate, onClose }: { id: string; onNavigate
               <h2 className="lq-thread-group-label">{label}</h2>
               <ul>
                 {list.map((t) => (
-                  <ThreadRow key={t.id} thread={t} current={t.id === currentId} onOpened={onNavigate} />
+                  <ThreadRow
+                    key={t.id}
+                    thread={t}
+                    current={t.id === currentId}
+                    onOpened={onNavigate}
+                    onDeleted={() => newChatRef.current?.focus()}
+                  />
                 ))}
               </ul>
             </section>

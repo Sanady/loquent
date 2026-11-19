@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { createAppStore } from "./state/store";
 import { botMsg, defaultConfig, fakeApi, readyStore, userMsg, view } from "./test/helpers";
@@ -133,5 +133,78 @@ describe("App", () => {
     const after = root.getAttribute("data-mode");
     expect(after).not.toBe(before);
     expect(localStorage.getItem("lq-color-mode")).toBe(after);
+  });
+  it("a brand background fixes the scheme and hides the theme toggle (R25)", async () => {
+    localStorage.setItem("lq-color-mode", "light");
+    const { container } = await renderApp(defaultConfig({ theme: { background: "#111111", text: "#eeeeee" } }));
+    expect(container.querySelector(".lq-root")!.getAttribute("data-mode")).toBe("dark");
+    expect(document.documentElement.getAttribute("data-lq-custom-colors")).toBe("background surface text muted");
+    expect(screen.queryByRole("button", { name: /switch to (dark|light) theme/i })).toBeNull();
+  });
+
+  it("thread titles are shown without markdown syntax", async () => {
+    await renderApp(defaultConfig(), {
+      threads: vi.fn(async () => [{ id: "t9", title: "Show me **markdown**: a [list](https://x.y)", updated_at: new Date().toISOString() }]),
+    });
+    expect(await screen.findByRole("button", { name: "Show me markdown: a list" })).toBeTruthy();
+  });
+
+  it("delete Cancel returns focus to the delete button; Confirm moves it to New chat", async () => {
+    const { store } = await renderApp();
+    await screen.findByText("First chat");
+    act(() => store.setState({ deleteThread: vi.fn(async () => {}) }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete First chat" }));
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Delete First chat" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete First chat" }));
+    fireEvent.keyDown(screen.getByRole("button", { name: /confirm delete/i }), { key: "Escape" });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Delete First chat" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete First chat" }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm delete/i }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: /new chat/i }));
+  });
+
+  describe("narrow screens", () => {
+    beforeEach(() => {
+      vi.stubGlobal(
+        "matchMedia",
+        vi.fn((q: string) => ({ matches: q.includes("max-width"), addEventListener: () => {}, removeEventListener: () => {} })),
+      );
+    });
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("the drawer is modal: main is inert, Escape closes it and focus returns to the toggle", async () => {
+      const { container } = await renderApp();
+      await screen.findByText("First chat");
+      const main = container.querySelector(".lq-main")!;
+      const layout = container.querySelector(".lq-layout")!;
+      expect(main.hasAttribute("inert")).toBe(false);
+      expect(layout.classList.contains("nav-open")).toBe(false);
+
+      fireEvent.click(screen.getByRole("button", { name: "Show chats" }));
+      expect(layout.classList.contains("nav-open")).toBe(true);
+      expect(main.hasAttribute("inert")).toBe(true);
+      expect(container.querySelector("#lq-nav")!.contains(document.activeElement)).toBe(true);
+
+      fireEvent.keyDown(window, { key: "Escape" });
+      expect(layout.classList.contains("nav-open")).toBe(false);
+      expect(main.hasAttribute("inert")).toBe(false);
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Show chats" }));
+    });
+
+    it("Escape in the rename field cancels the rename only, not the drawer", async () => {
+      const { container } = await renderApp();
+      await screen.findByText("First chat");
+      fireEvent.click(screen.getByRole("button", { name: "Show chats" }));
+      fireEvent.click(screen.getByRole("button", { name: "Rename First chat" }));
+      const input = screen.getByRole("textbox", { name: "Chat title" });
+      fireEvent.keyDown(input, { key: "Escape" });
+      expect(screen.queryByRole("textbox", { name: "Chat title" })).toBeNull();
+      expect(container.querySelector(".lq-layout")!.classList.contains("nav-open")).toBe(true);
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Rename First chat" }));
+    });
   });
 });
