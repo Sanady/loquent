@@ -53,6 +53,21 @@ class Select:
     def __post_init__(self) -> None:
         if not 1 <= len(self.options) <= MAX_OPTIONS:
             raise ValueError(f"Select needs between 1 and {MAX_OPTIONS} options")
+        values = []
+        for o in self.options:
+            if isinstance(o, str):
+                values.append(o)
+            elif (
+                isinstance(o, tuple)
+                and len(o) == 2
+                and isinstance(o[0], str)
+                and isinstance(o[1], str)
+            ):
+                values.append(o[0])
+            else:
+                raise ValueError(f"Select option must be a string or (value, label): {o!r}")
+        if len(set(values)) != len(values):
+            raise ValueError("Select option values must be unique")
 
     def args(self) -> dict[str, Any]:
         opts = [
@@ -77,11 +92,40 @@ class Form:
 
     tool_name = FORM_TOOL
 
+    def __post_init__(self) -> None:
+        _check_schema(self.schema)
+
     def args(self) -> dict[str, Any]:
         out: dict[str, Any] = {"message": self.message, "schema": self.schema}
         if self.key is not None:
             out["key"] = self.key
         return out
+
+
+def _check_schema(schema: Any) -> None:
+    """Raise ValueError unless the UI can display ``schema`` (a flat JSON Schema object)."""
+    if not isinstance(schema, dict):
+        raise ValueError("Form schema must be a dict")  # noqa: TRY004 - documented as ValueError
+    props = schema.get("properties")
+    if not isinstance(props, dict) or not props:
+        raise ValueError("Form schema needs a non-empty 'properties' object")
+    for name, spec in props.items():
+        if not isinstance(spec, dict):
+            raise ValueError(f"Form field {name!r} must be a dict")  # noqa: TRY004
+        if "enum" in spec:
+            enum = spec["enum"]
+            if not isinstance(enum, list) or not enum or not all(isinstance(e, str) for e in enum):
+                raise ValueError(f"Form field {name!r}: 'enum' must be a non-empty list of strings")
+        elif spec.get("type") not in _FIELD_TYPES:
+            raise ValueError(
+                f"Form field {name!r}: type must be one of {sorted(_FIELD_TYPES)} (or an enum)"
+            )
+    required = schema.get("required", [])
+    if not isinstance(required, list) or not all(isinstance(r, str) for r in required):
+        raise ValueError("Form schema 'required' must be a list of field names")
+    missing = [r for r in required if r not in props]
+    if missing:
+        raise ValueError(f"Form schema requires fields not in 'properties': {missing}")
 
 
 Widget = Confirm | Select | Form
@@ -228,7 +272,7 @@ def validate_answer(tool_name: str, args: dict, answer: Any) -> None:
             raise InvalidAnswer("confirm answer needs boolean 'confirmed'")
     elif tool_name == SELECT_TOOL:
         allowed = _option_values(args.get("options"))
-        if args.get("multiple"):
+        if args.get("multiple") is True:  # exactly as the UI decides it
             values = answer.get("values")
             if not isinstance(values, list) or not all(isinstance(v, str) for v in values):
                 raise InvalidAnswer("select answer needs a list 'values'")

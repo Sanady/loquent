@@ -21,7 +21,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, StreamingResponse
 from starlette.routing import Route
 
-from loquent.context import FileRef, RunContext
+from loquent.context import FileRef, PublicUser, RunContext
 from loquent.protocol import encode_sse, event_to_dict, events_to_messages, new_id
 from loquent.runner import GENERIC_ERROR, STALE_AFTER_S, effective_status, start_run
 from loquent.store.models import Run, RunInProgress, Thread, User
@@ -79,13 +79,15 @@ def _check_page_query(q: dict[str, str]) -> None:
 
 def message_events(content: str, attachments: list[dict] | None = None) -> list[BaseEvent]:
     mid = new_id()
-    return [
+    events: list[BaseEvent] = [
         TextMessageStartEvent(
             message_id=mid, role="user", metadata={"attachments": attachments or []}
-        ),
-        TextMessageContentEvent(message_id=mid, delta=content),
-        TextMessageEndEvent(message_id=mid),
+        )
     ]
+    if content:  # an attachments-only message has no text
+        events.append(TextMessageContentEvent(message_id=mid, delta=content))
+    events.append(TextMessageEndEvent(message_id=mid))
+    return events
 
 
 async def pending_widget_call(
@@ -160,6 +162,7 @@ def routes(deps: Deps) -> list[Route]:
     adapter = deps.adapter
     settings = deps.settings
     allowed_headers = {h.lower() for h in settings.forward_headers} - _NEVER_FORWARD
+    widget_tools = list(WIDGET_TOOLS) if adapter.supports_widgets and settings.widgets else []
 
     def forwarded_props(request: Request, user: User, page_query: dict[str, str]) -> dict:
         headers = {
@@ -221,12 +224,13 @@ def routes(deps: Deps) -> list[Route]:
         files: list[FileRef] = []
         supersede: Run | None = None
         if isinstance(inp, MessageInput):
-            if not inp.content.strip():
+            if not inp.content.strip() and not inp.attachments:
                 raise invalid_input()
             attachments, files = await resolve_attachments(user, inp.attachments)
             input_events = message_events(inp.content, attachments)
             if thread is None:
-                title = inp.content.strip()[:TITLE_CHARS]
+                # Text first; a files-only message is titled after its first file.
+                title = (inp.content.strip() or attachments[0]["name"])[:TITLE_CHARS]
                 thread = await store.create_thread(user.id, title)
         elif thread is None:
             raise invalid_input()  # tool results and regenerate need an existing thread
@@ -275,11 +279,12 @@ def routes(deps: Deps) -> list[Route]:
             fp = forwarded_props(request, user, body.page_query)
             agent_input = RunAgentInput(
                 thread_id=thread.id, run_id=run.id, state={}, messages=messages,
-                tools=list(WIDGET_TOOLS) if adapter.supports_widgets else [], context=[],
+                tools=list(widget_tools), context=[],
                 forwarded_props=fp,
             )  # fmt: skip
             ctx = RunContext(
-                thread_id=thread.id, run_id=run.id, user=user, messages=messages,
+                thread_id=thread.id, run_id=run.id,
+                user=PublicUser(id=user.id, username=user.username), messages=messages,
                 forwarded_props=fp, files=files,
             )  # fmt: skip
             handle = start_run(

@@ -36,3 +36,9 @@ def test_effective_secret():
     k = s.effective_secret()
     assert len(k) >= 32 and s.effective_secret() == k
     assert Settings().effective_secret() != k
+
+
+def test_widgets_setting_defaults_true_and_reads_env(monkeypatch):
+    assert Settings().widgets is True
+    monkeypatch.setenv("LOQUENT_WIDGETS", "false")
+    assert Settings().widgets is False

@@ -74,6 +74,7 @@ class MongoStore:
         self._db = self._client[self._db_name]
         await self._db.users.create_index("username", unique=True)
         await self._db.threads.create_index([("owner_id", 1), ("updated_at", -1)])
+        await self._db.threads.create_index("active_run_id")  # heartbeat/finish look runs up
         await self._db.runs.create_index([("thread_id", 1), ("created_at", 1)])
         await self._db.events.create_index([("run_id", 1), ("seq", 1)], unique=True)
 

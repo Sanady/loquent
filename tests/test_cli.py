@@ -220,3 +220,10 @@ def test_cli_file_target_dataclass_forward_refs(tmp_path, captured):
         "def agent(messages):\n    return C().x\n"
     )
     assert cli.main(["serve", f"{f}:agent"]) == 0
+
+
+def test_cli_no_widgets_flag(captured):
+    assert cli.main(["serve", "http://x/agent", "--no-widgets"]) == 0
+    assert captured["kw"]["widgets"] is False
+    assert cli.main(["serve", "http://x/agent"]) == 0
+    assert "widgets" not in captured["kw"]  # unset: env/default decides

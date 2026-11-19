@@ -87,6 +87,8 @@ def _cmd_serve(args: argparse.Namespace) -> int:
             overrides[field] = value
     if args.insecure_no_auth:
         overrides["insecure_no_auth"] = True
+    if args.no_widgets:
+        overrides["widgets"] = False
     if args.forwarded_allow_ips is not None:
         overrides["forwarded_allow_ips"] = [
             p.strip() for p in args.forwarded_allow_ips.split(",") if p.strip()
@@ -148,6 +150,11 @@ def _parser() -> argparse.ArgumentParser:
     s.add_argument("--insecure-no-auth", action="store_true")
     s.add_argument("--root-path")
     s.add_argument("--forwarded-allow-ips", metavar="IPS", help="comma-separated trusted proxies")
+    s.add_argument(
+        "--no-widgets",
+        action="store_true",
+        help="don't offer the widget tools to the agent (for backends without tool support)",
+    )
     s.set_defaults(func=_cmd_serve)
 
     u = sub.add_parser("user", help="manage users")

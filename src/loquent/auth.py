@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import secrets
 from dataclasses import dataclass
@@ -30,6 +31,22 @@ _hasher = PasswordHasher()
 
 class InsecureConfigError(Exception):
     """Raised when the configuration would expose Loquent unsafely."""
+
+
+class ClientForbidden(Exception):
+    """The client may not use the app at all (answered 403 ``forbidden``)."""
+
+
+def is_loopback(host: str | None) -> bool:
+    """True for 127.0.0.0/8, ::1 and IPv4-mapped loopback; anything unparsable is not."""
+    if not host:
+        return False
+    try:
+        ip = ipaddress.ip_address(host.strip("[]"))
+    except ValueError:
+        return False
+    mapped = getattr(ip, "ipv4_mapped", None)
+    return (mapped or ip).is_loopback
 
 
 def hash_password(pw: str) -> str:
@@ -72,9 +89,19 @@ class Authenticator(Protocol):
 
 
 class NoAuth:
+    """Everyone is the one local user. Only loopback clients are served unless
+    ``allow_remote`` (``insecure_no_auth``) is set; behind uvicorn's proxy headers the
+    client address is the forwarded one, so a proxied public client is refused too."""
+
     mode = "none"
 
+    def __init__(self, *, allow_remote: bool = False) -> None:
+        self.allow_remote = allow_remote
+
     async def current_user(self, request: Request, store: Store) -> User | None:
+        client = request.client
+        if not self.allow_remote and not is_loopback(client.host if client else None):
+            raise ClientForbidden()
         user = await store.get_user_by_username(LOCAL_USERNAME)
         if user is None:
             try:
@@ -103,12 +130,21 @@ class PasswordAuth:
         return await store.get_user(session.user_id)
 
 
+def _has_key(settings: Settings) -> bool:
+    return bool(settings.secret_key and settings.secret_key.get_secret_value())
+
+
+def check_secret_key(settings: Settings) -> None:
+    """Password mode needs a fixed key: a random one breaks sessions across workers."""
+    if settings.auth == "password" and not _has_key(settings):
+        raise InsecureConfigError("auth='password' requires LOQUENT_SECRET_KEY to be set")
+
+
 def check_bind_safety(settings: Settings) -> None:
-    has_key = bool(settings.secret_key and settings.secret_key.get_secret_value())
+    check_secret_key(settings)
     if settings.auth == "password":
-        if not has_key:
-            raise InsecureConfigError("auth='password' requires LOQUENT_SECRET_KEY to be set")
         return
+    has_key = _has_key(settings)
     host = settings.host.strip().lower().strip("[]")
     if host not in LOCALHOSTS:
         if not settings.insecure_no_auth:

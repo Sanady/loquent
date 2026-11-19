@@ -9,8 +9,15 @@ from typing import Any
 
 from ag_ui.core import AssistantMessage, Message, ToolMessage
 
-from loquent.store.models import User
 from loquent.ui import is_widget_tool
+
+
+@dataclass(frozen=True)
+class PublicUser:
+    """The signed-in user as agent code sees it: never the stored password hash."""
+
+    id: str
+    username: str
 
 
 @dataclass
@@ -40,7 +47,7 @@ def _loads(text: Any) -> Any:
 class RunContext:
     thread_id: str
     run_id: str
-    user: User | None = None
+    user: PublicUser | None = None
     messages: list[Message] = field(default_factory=list)
     forwarded_props: dict = field(default_factory=dict)
     files: list[FileRef] = field(default_factory=list)

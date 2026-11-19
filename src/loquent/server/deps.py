@@ -14,7 +14,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from loquent.adapters.base import Adapter
-from loquent.auth import SESSION_COOKIE, Authenticator, SessionManager
+from loquent.auth import SESSION_COOKIE, Authenticator, ClientForbidden, SessionManager
 from loquent.files import FileStore
 from loquent.runner import RunHandle
 from loquent.settings import Settings
@@ -88,7 +88,10 @@ class Deps:
 
     async def user(self, request: Request) -> User:
         """The signed-in user (401 if none); non-GET requests in password mode need CSRF."""
-        user = await self.authenticator.current_user(request, self.store)
+        try:
+            user = await self.authenticator.current_user(request, self.store)
+        except ClientForbidden:
+            raise ApiError(403, "forbidden") from None
         if user is None:
             raise ApiError(401, "unauthorized")
         # Without sessions there is no token to check, but a custom header can't be sent

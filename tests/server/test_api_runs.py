@@ -664,3 +664,20 @@ async def test_recheck_failure_of_any_kind_discards_new_run(kind):
         run = await c.store.get_run(ours[0])
         assert run.superseded and run.status == "cancelled"
         assert c.app.state.live_runs == {}
+
+
+async def test_ctx_user_is_a_public_view_without_password_hash():
+    from loquent.context import PublicUser
+
+    seen = {}
+
+    def agent(messages, ctx):
+        seen["user"] = ctx.user
+        return "ok"
+
+    async with make_client(agent) as c:
+        assert sse_events(await run_message(c, "hi"))[-1]["type"] == "RUN_FINISHED"
+    user = seen["user"]
+    assert isinstance(user, PublicUser)
+    assert user.username == "local" and user.id
+    assert not hasattr(user, "password_hash")

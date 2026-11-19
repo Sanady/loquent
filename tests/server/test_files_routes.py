@@ -358,3 +358,27 @@ async def test_fresh_url_for_owner_only(tmp_path):
                 assert (await anon.get(f"/api/files/{f['id']}/url")).status_code == 401
         r = await a.get(f"/api/files/{'e' * 32}/url")
         assert r.status_code == 404
+
+
+async def test_attachment_only_message_is_accepted_and_titled_by_file(tmp_path):
+    seen = {}
+
+    async def agent(messages, ctx):
+        seen["names"] = [f.name for f in ctx.files]
+        return "got it"
+
+    fs = LocalFileStore(tmp_path)
+    async with make_client(agent, file_store=fs) as c:
+        a = (await upload(c, PNG, "photo.png", "image/png")).json()
+        r = await c.post(
+            "/api/runs", json={"input": {"type": "message", "content": "", "attachments": [a["id"]]}}
+        )
+        ev = sse_events(r)
+        assert ev[-1]["type"] == "RUN_FINISHED"
+        assert seen["names"] == ["photo.png"]
+        threads = (await c.get("/api/threads")).json()
+        assert [t["title"] for t in threads] == ["photo.png"]
+        # whitespace-only text with no attachments is still rejected
+        r = await c.post("/api/runs", json={"input": {"type": "message", "content": "  "}})
+        assert r.status_code == 400
+        assert r.json() == {"error": "invalid_input"}

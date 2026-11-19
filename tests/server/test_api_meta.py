@@ -50,7 +50,7 @@ async def test_config_has_no_secrets():
         assert "upstream.internal" not in r.text
         assert set(body) == {
             "app_name", "logo_url", "theme", "hide", "auth", "widgets", "attachments",
-            "max_upload_mb",
+            "max_upload_mb", "allowed_upload_types",
         }  # fmt: skip
         assert body["app_name"] == "Acme Help"
         assert body["logo_url"] is None
@@ -174,3 +174,33 @@ async def test_unknown_routes_and_methods_are_json():
         r = await c.put("/api/threads")
         assert r.status_code == 405
         assert r.json() == {"error": "method_not_allowed"}
+
+
+async def test_config_exposes_upload_limits():
+    settings = Settings(max_upload_mb=3, allowed_upload_types=["image/png", "text/plain"])
+    async with make_client(settings=settings) as c:
+        body = (await c.get("/api/config")).json()
+        assert body["max_upload_mb"] == 3
+        assert body["allowed_upload_types"] == ["image/png", "text/plain"]
+
+
+async def test_widgets_false_hides_tools_and_config_flag():
+    seen = {}
+
+    class Spy:
+        supports_widgets = True
+        supports_attachments = False
+
+        async def run(self, input, ctx):
+            seen["tools"] = [t.name for t in input.tools]
+            return
+            yield
+
+    async with make_client(adapter=Spy(), settings=Settings(widgets=False)) as c:
+        assert (await c.get("/api/config")).json()["widgets"] is False
+        assert sse_events(await run_message(c, "hi"))[-1]["type"] == "RUN_FINISHED"
+        assert seen["tools"] == []
+    async with make_client(adapter=Spy()) as c:
+        assert (await c.get("/api/config")).json()["widgets"] is True
+        sse_events(await run_message(c, "hi"))
+        assert seen["tools"] == ["loquent_confirm", "loquent_select", "loquent_form"]

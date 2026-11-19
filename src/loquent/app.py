@@ -15,6 +15,7 @@ from loquent.auth import (
     PasswordAuth,
     SessionManager,
     check_bind_safety,
+    check_secret_key,
 )
 from loquent.files import FileStore, LocalFileStore
 from loquent.server.app import create_app
@@ -85,6 +86,7 @@ class App:
         elif overrides:
             _checked(overrides)
             settings = Settings.model_validate({**settings.model_dump(), **overrides})
+        check_secret_key(settings)
         self.settings = settings
         adapter = resolve_agent(
             agent,
@@ -97,7 +99,7 @@ class App:
             file_store = LocalFileStore(Path(settings.files_dir))
         if authenticator is None:
             authenticator = (
-                NoAuth()
+                NoAuth(allow_remote=settings.insecure_no_auth)
                 if settings.auth == "none"
                 else PasswordAuth(SessionManager(settings.effective_secret()))
             )

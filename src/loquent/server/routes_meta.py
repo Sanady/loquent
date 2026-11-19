@@ -34,10 +34,11 @@ def routes(deps: Deps) -> list[Route]:
                 "theme": dict(s.theme),
                 "hide": list(s.hide),
                 "auth": deps.authenticator.mode,
-                "widgets": bool(deps.adapter.supports_widgets),
+                "widgets": bool(deps.adapter.supports_widgets) and s.widgets,
                 "attachments": bool(deps.adapter.supports_attachments)
                 and deps.file_store is not None,
                 "max_upload_mb": s.max_upload_mb,
+                "allowed_upload_types": list(s.allowed_upload_types),
             }
         )
 

@@ -165,3 +165,64 @@ def test_unknown_override_rejected_without_settings():
 
     with pytest.raises(TypeError, match="nonsense"):
         App(echo, nonsense=1)
+
+
+def test_app_password_mode_requires_secret_key(tmp_path):
+    import pytest
+
+    from loquent.auth import InsecureConfigError
+
+    with pytest.raises(InsecureConfigError, match="SECRET_KEY"):
+        App(echo, settings=settings(tmp_path, auth="password"))
+    with pytest.raises(InsecureConfigError):
+        App(echo, settings=settings(tmp_path, auth="password", secret_key=""))
+    with pytest.raises(InsecureConfigError):
+        App(echo, auth="password", store_url=f"sqlite:///{tmp_path}/p.db")
+    App(echo, settings=settings(tmp_path, auth="password", secret_key="k" * 32))  # fine
+
+
+def remote_client(app, host):
+    transport = httpx.ASGITransport(app=app, client=(host, 4321))
+    return httpx.AsyncClient(transport=transport, base_url="http://test")
+
+
+async def test_app_none_mode_serves_only_loopback_clients(tmp_path):
+    app = App(echo, settings=settings(tmp_path))
+    async with app.lifespan():
+        for host in ("203.0.113.7", "10.0.0.2", "::ffff:198.51.100.1", "testserver"):
+            async with remote_client(app, host) as c:
+                r = await c.get("/api/auth/me")
+                assert r.status_code == 403, host
+                assert r.json() == {"error": "forbidden"}
+                r = await c.post(
+                    "/api/runs",
+                    json={"input": {"type": "message", "content": "hi"}},
+                    headers={"X-Loquent-CSRF": "1"},
+                )
+                assert r.status_code == 403
+        for host in ("127.0.0.1", "127.8.9.10", "::1", "::ffff:127.0.0.1"):
+            async with remote_client(app, host) as c:
+                assert (await c.get("/api/auth/me")).status_code == 200, host
+        async with remote_client(app, "203.0.113.7") as c:  # public routes stay public
+            assert (await c.get("/healthz")).status_code == 200
+            assert (await c.get("/api/config")).status_code == 200
+
+
+async def test_app_none_mode_insecure_no_auth_serves_remote_clients(tmp_path):
+    app = App(echo, settings=settings(tmp_path, insecure_no_auth=True))
+    async with app.lifespan(), remote_client(app, "203.0.113.7") as c:
+        assert (await c.get("/api/auth/me")).status_code == 200
+
+
+async def test_app_none_mode_uses_proxy_resolved_client(tmp_path):
+    """Behind uvicorn's proxy-headers middleware the forwarded client address is checked."""
+    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+    app = App(echo, settings=settings(tmp_path))
+    proxied = ProxyHeadersMiddleware(app, trusted_hosts=["127.0.0.1"])
+    async with app.lifespan(), remote_client(proxied, "127.0.0.1") as c:
+        r = await c.get("/api/auth/me", headers={"X-Forwarded-For": "203.0.113.7"})
+        assert r.status_code == 403
+        assert (await c.get("/api/auth/me")).status_code == 200
+        r = await c.get("/api/auth/me", headers={"X-Forwarded-For": "127.0.0.1"})
+        assert r.status_code == 200

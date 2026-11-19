@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     hide: list[Literal["thread_list"]] = []
 
     # agent
+    widgets: bool = True  # advertise the widget tools to the agent
     forward_headers: list[str] = []
     model: str | None = None
     api_key: SecretStr | None = None

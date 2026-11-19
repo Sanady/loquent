@@ -146,3 +146,54 @@ def test_malformed_args_raise_only_invalid_answer(tool, args, answer):
 def test_form_huge_int_accepted_without_overflow(ftype):
     args = Form("f", {"type": "object", "properties": {"n": {"type": ftype}}}).args()
     validate_answer("loquent_form", args, {"values": {"n": 10**400}})
+
+
+def test_select_multiple_must_be_exactly_true_to_expect_values():
+    args = {"message": "m", "options": ["a", "b"], "multiple": "yes"}  # truthy, not True
+    validate_answer("loquent_select", args, {"value": "a"})  # what the client sends
+    with pytest.raises(InvalidAnswer):
+        validate_answer("loquent_select", args, {"values": ["a"]})
+
+
+def test_select_rejects_duplicate_option_values():
+    with pytest.raises(ValueError, match="unique"):
+        Select("x", ["a", ("a", "Also a")])
+    with pytest.raises(ValueError):
+        Select("x", ["a", ("b",)])  # type: ignore[list-item]
+    Select("x", ["a", ("b", "Bee")])
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "object", "properties": {}},
+        {"type": "object", "properties": {"a": {"type": "array"}}},
+        {"type": "object", "properties": {"a": {}}},
+        {"type": "object", "properties": {"a": "string"}},
+        {"type": "object", "properties": {"a": {"enum": [1, 2]}}},
+        {"type": "object", "properties": {"a": {"enum": []}}},
+        {"type": "object", "properties": {"a": {"type": "string"}}, "required": ["b"]},
+        {"type": "object", "properties": {"a": {"type": "string"}}, "required": "a"},
+        {"properties": "nope"},
+    ],
+)
+def test_form_rejects_unsupported_schema_at_construction(schema):
+    with pytest.raises(ValueError):
+        Form("f", schema)
+
+
+def test_form_accepts_supported_schema():
+    Form(
+        "f",
+        {
+            "type": "object",
+            "properties": {
+                "s": {"type": "string", "title": "S"},
+                "n": {"type": "number"},
+                "i": {"type": "integer"},
+                "b": {"type": "boolean"},
+                "e": {"enum": ["x", "y"]},
+            },
+            "required": ["s", "e"],
+        },
+    )

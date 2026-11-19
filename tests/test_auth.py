@@ -6,6 +6,7 @@ from starlette.requests import Request
 
 from loquent.auth import (
     SESSION_COOKIE,
+    ClientForbidden,
     InsecureConfigError,
     NoAuth,
     PasswordAuth,
@@ -38,11 +39,12 @@ class FakeStore:
         return next((u for u in self.users.values() if u.username == username), None)
 
 
-def make_request(cookie=None):
+def make_request(cookie=None, client=("127.0.0.1", 50000)):
     headers = []
     if cookie is not None:
         headers.append((b"cookie", f"{SESSION_COOKIE}={cookie}".encode()))
-    return Request({"type": "http", "headers": headers, "method": "GET", "path": "/"})
+    scope = {"type": "http", "headers": headers, "method": "GET", "path": "/", "client": client}
+    return Request(scope)
 
 
 def test_password_hash_roundtrip_and_wrong_password():
@@ -115,6 +117,16 @@ async def test_no_auth_creates_local_user_once():
     u2 = await a.current_user(make_request(), store)
     assert u1.username == "local" and u1.id == u2.id
     assert not verify_password(u1.password_hash, "")
+
+
+async def test_no_auth_refuses_non_loopback_clients_unless_allowed():
+    store = FakeStore()
+    for client in (("203.0.113.9", 1), ("localhost", 1), None):
+        with pytest.raises(ClientForbidden):
+            await NoAuth().current_user(make_request(client=client), store)
+    user = await NoAuth(allow_remote=True).current_user(make_request(client=("8.8.8.8", 1)), store)
+    assert user.username == "local"
+    assert (await NoAuth().current_user(make_request(client=("::1", 1)), store)).id == user.id
 
 
 async def test_password_auth_current_user():
