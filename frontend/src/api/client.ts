@@ -20,6 +20,7 @@ export interface AppConfig {
   widgets: boolean;
   attachments: boolean;
   max_upload_mb: number;
+  allowed_upload_types: string[];
 }
 export interface User {
   id?: string;

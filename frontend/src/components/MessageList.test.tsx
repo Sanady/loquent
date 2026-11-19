@@ -121,13 +121,11 @@ describe("MessageList", () => {
     expect(container.querySelectorAll(".lq-widget button")).toHaveLength(2);
   });
 
-  it("attachment chips show name and size and open a fresh signed URL", async () => {
-    const fileUrl = vi.fn(async (id: string) => ({ url: `https://files.test/${id}?sig=abc` }));
-    const clicks: { href: string; target: string; rel: string }[] = [];
-    const orig = HTMLAnchorElement.prototype.click;
-    HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) {
-      clicks.push({ href: this.href, target: this.target, rel: this.rel });
-    };
+  it("attachment chips open a window synchronously, then point it at a fresh signed URL", async () => {
+    let resolveUrl!: (v: { url: string }) => void;
+    const fileUrl = vi.fn(() => new Promise<{ url: string }>((r) => (resolveUrl = r)));
+    const win = { opener: {} as unknown, location: { href: "" }, close: vi.fn() };
+    const open = vi.spyOn(window, "open").mockImplementation(() => win as unknown as Window);
     try {
       const msg = userMsg("u1", "see file", {
         attachments: [{ id: "f1", name: "report.pdf", content_type: "application/pdf", size: 2048 }],
@@ -137,11 +135,32 @@ describe("MessageList", () => {
       const chip = screen.getByRole("button", { name: /report\.pdf/ });
       expect(chip.textContent).toContain("2 KB");
       fireEvent.click(chip);
-      await waitFor(() => expect(clicks).toHaveLength(1));
+      // Opened in the click itself (Safari blocks window.open after an await), without an opener.
+      expect(open).toHaveBeenCalledWith("", "_blank");
+      expect(win.opener).toBeNull();
       expect(fileUrl).toHaveBeenCalledWith("f1");
-      expect(clicks[0]).toEqual({ href: "https://files.test/f1?sig=abc", target: "_blank", rel: "noopener noreferrer" });
+      await act(async () => resolveUrl({ url: "https://files.test/f1?sig=abc" }));
+      expect(win.location.href).toBe("https://files.test/f1?sig=abc");
+      expect(win.close).not.toHaveBeenCalled();
     } finally {
-      HTMLAnchorElement.prototype.click = orig;
+      open.mockRestore();
+    }
+  });
+
+  it("attachment chip closes the blank window when the URL cannot be fetched", async () => {
+    const fileUrl = vi.fn(async () => {
+      throw new Error("nope");
+    });
+    const win = { opener: {} as unknown, location: { href: "" }, close: vi.fn() };
+    const open = vi.spyOn(window, "open").mockImplementation(() => win as unknown as Window);
+    try {
+      const msg = userMsg("u1", "x", { attachments: [{ id: "f1", name: "a.pdf", content_type: "application/pdf", size: 1 }] });
+      renderList(readyStore({ view: view([msg]) }), fileUrl);
+      fireEvent.click(screen.getByRole("button", { name: /a\.pdf/ }));
+      await waitFor(() => expect(win.close).toHaveBeenCalled());
+      expect(screen.getByRole("button", { name: /could not open/ })).toBeTruthy();
+    } finally {
+      open.mockRestore();
     }
   });
 

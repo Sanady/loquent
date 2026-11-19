@@ -11,6 +11,10 @@ export function parseOptions(raw: unknown): Option[] | null {
   if (!Array.isArray(raw) || raw.length === 0) return null;
   const out: Option[] = [];
   for (const o of raw) {
+    if (typeof o === "string") {
+      out.push({ value: o, label: o }); // the server accepts plain strings too
+      continue;
+    }
     if (!o || typeof o !== "object") return null;
     const { value, label } = o as Record<string, unknown>;
     if (typeof value !== "string") return null;

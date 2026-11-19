@@ -36,6 +36,8 @@ export function parseSchema(schema: unknown): Field[] | null {
     fields.push({ name, kind, label, required: req.includes(name), options });
   }
   if (fields.length === 0) return null;
+  // A required field the form can't show could never be answered: the server would reject it.
+  if (!req.every((r) => fields.some((f) => f.name === r))) return null;
   return fields;
 }
 

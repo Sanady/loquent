@@ -135,3 +135,71 @@ describe("Composer", () => {
     expect(screen.getByRole("alert").textContent).toMatch(/big\.bin/);
   });
 });
+
+describe("Composer upload limits and failed uploads (item 13)", () => {
+  it("rejects types outside allowed_upload_types with an inline notice", () => {
+    const store = readyStore({ config: defaultConfig({ attachments: true, allowed_upload_types: ["image/png", "text/plain"] }) });
+    renderComposer(store);
+    const input = document.querySelector("input[type=file]") as HTMLInputElement;
+    expect(input.accept).toBe("image/png,text/plain");
+    const ok = new File(["x"], "pic.png", { type: "image/png" });
+    const bad = new File(["x"], "tool.exe", { type: "application/x-msdownload" });
+    const unknown = new File(["x"], "blob.xyz", { type: "" });
+    fireEvent.change(input, { target: { files: [ok, bad, unknown] } });
+    expect(screen.getByText("pic.png")).toBeTruthy();
+    expect(screen.queryByText("tool.exe")).toBeNull();
+    const alert = screen.getByRole("alert").textContent ?? "";
+    expect(alert).toMatch(/tool\.exe/);
+    expect(alert).toMatch(/blob\.xyz/);
+    expect(alert).toMatch(/not a supported file type|not supported/);
+  });
+
+  it("type matching ignores case and parameters", () => {
+    const store = readyStore({ config: defaultConfig({ attachments: true, allowed_upload_types: ["text/plain"] }) });
+    renderComposer(store);
+    const input = document.querySelector("input[type=file]") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["x"], "a.txt", { type: "Text/Plain;charset=utf-8" })] } });
+    expect(screen.getByText("a.txt")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("restores the draft text and files when the accepted send fails (upload error)", async () => {
+    const store = readyStore({ config: defaultConfig({ attachments: true }) });
+    const d = deferred<boolean>();
+    const send = vi.fn(() => {
+      store.setState({ starting: true });
+      return d.promise;
+    });
+    store.setState({ send });
+    const box = renderComposer(store);
+    const input = document.querySelector("input[type=file]") as HTMLInputElement;
+    const file = new File(["abc"], "notes.txt", { type: "text/plain" });
+    fireEvent.change(input, { target: { files: [file] } });
+    fireEvent.change(box, { target: { value: "see attached" } });
+    fireEvent.submit(screen.getByRole("form", { name: /message/i }));
+    expect(box.value).toBe("");
+    expect(screen.queryByText("notes.txt")).toBeNull();
+    await act(async () => {
+      store.setState({ starting: false });
+      d.resolve(false);
+    });
+    expect(box.value).toBe("see attached");
+    expect(screen.getByText("notes.txt")).toBeTruthy();
+  });
+
+  it("does not restore after a successful send", async () => {
+    const store = readyStore();
+    const d = deferred<boolean>();
+    store.setState({
+      send: vi.fn(() => {
+        store.setState({ starting: true });
+        return d.promise;
+      }),
+    });
+    const box = renderComposer(store);
+    fireEvent.change(box, { target: { value: "hello" } });
+    fireEvent.submit(screen.getByRole("form", { name: /message/i }));
+    await act(async () => d.resolve(true));
+    expect(box.value).toBe("");
+  });
+});

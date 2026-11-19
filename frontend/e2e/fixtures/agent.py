@@ -3,12 +3,15 @@
 - any text: streams "Hello ", "from ", "Loquent"
 - text containing "refund": asks a Confirm widget; an approved answer replies "Refunded."
 - text containing "slow": streams 20 chunks 100 ms apart, then "Slow reply complete."
+- text containing "regen": replies "Reply #N", N counting every such run (regenerate included)
 """
 
 import asyncio
 
 from loquent import ui
 from loquent.ui import Confirm
+
+_regen_runs = 0
 
 
 def _last_user_text(messages) -> str:
@@ -29,6 +32,11 @@ async def agent(messages, ctx):
     text = _last_user_text(messages).lower()
     if "refund" in text:
         yield ui.ask(Confirm("Refund $42?", key="refund"))
+        return
+    if "regen" in text:
+        global _regen_runs
+        _regen_runs += 1
+        yield f"Reply #{_regen_runs}"
         return
     if "slow" in text:
         for i in range(1, 21):

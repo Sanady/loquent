@@ -54,9 +54,21 @@ export function AttachmentChip({ file }: { file: Attachment }) {
   const onClick = async () => {
     setBusy(true);
     setFailed(false);
+    // Open the tab inside the click: Safari blocks window.open after an await. The signed URL
+    // arrives later; the blank tab must not keep a handle on this page.
+    let w: Window | null = null;
     try {
-      openInNewTab((await fileUrl(file.id)).url);
+      w = window.open("", "_blank");
+      if (w) w.opener = null;
     } catch {
+      w = null;
+    }
+    try {
+      const { url } = await fileUrl(file.id);
+      if (w) w.location.href = url;
+      else openInNewTab(url); // popup refused outright: try a plain link
+    } catch {
+      w?.close();
       setFailed(true);
     } finally {
       setBusy(false);

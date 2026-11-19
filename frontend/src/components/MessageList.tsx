@@ -45,10 +45,14 @@ export function MessageList() {
   const idle = !starting && (run === "idle" || run === "cancelled");
   const regenAt = idle ? lastAssistantIndex(items) : -1;
   const last = items[items.length - 1];
+  // Only the latest run's output can hold an answerable widget: one after the last user message.
+  let lastUser = -1;
   let lastPending = -1;
   items.forEach((it, i) => {
+    if (it.kind === "message" && it.role === "user") lastUser = i;
     if (it.kind === "widget" && it.answer === undefined) lastPending = i;
   });
+  if (lastPending < lastUser) lastPending = -1;
   const showTyping =
     (running || starting) && !(last?.kind === "message" && last.role === "assistant" && last.streaming);
 

@@ -5,18 +5,35 @@ import { IconFile, IconPaperclip, IconSend, IconStop, IconX } from "./icons";
 
 const MAX_ROWS_PX = 220;
 
+/** The MIME type the server checks: the browser sends unknown types as application/octet-stream. */
+function mimeOf(f: File): string {
+  return (f.type || "application/octet-stream").split(";", 1)[0].trim().toLowerCase();
+}
+
+function names(list: string[]): string {
+  return `${list.join(", ")} ${list.length > 1 ? "are" : "is"}`;
+}
+
 export function Composer() {
   const store = useAppStore();
   const starting = useApp((s) => s.starting);
   const running = useApp((s) => s.view.run === "running");
   const attachments = useApp((s) => s.config?.attachments ?? false);
   const maxMb = useApp((s) => s.config?.max_upload_mb ?? 0);
+  const allowedTypes = useApp((s) => s.config?.allowed_upload_types);
   const threadId = useApp((s) => s.currentThreadId);
 
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   const boxRef = useRef<HTMLTextAreaElement>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const busy = starting || running;
@@ -46,6 +63,8 @@ export function Composer() {
   const submit = () => {
     if (!canSubmit) return;
     // Keep the draft until the store reports the send was accepted (starting flips true).
+    const draftText = text;
+    const draftFiles = files;
     let cleared = false;
     const unsub = store.subscribe((s, prev) => {
       if (!cleared && s.starting && !prev.starting) {
@@ -59,6 +78,14 @@ export function Composer() {
     void store
       .getState()
       .send(text, files)
+      .catch(() => false)
+      .then((sent) => {
+        // Accepted, then not sent after all (an upload or the start failed, or Stop): give the
+        // draft back unless the user has started a new one meanwhile.
+        if (sent || !cleared || !mounted.current) return;
+        setText((t) => (t === "" ? draftText : t));
+        setFiles((f) => (f.length === 0 ? draftFiles : f));
+      })
       .finally(unsub);
   };
 
@@ -76,13 +103,19 @@ export function Composer() {
   };
 
   const addFiles = (list: Iterable<File>) => {
+    const allowed = allowedTypes ? new Set(allowedTypes.map((t) => t.toLowerCase())) : null;
     const ok: File[] = [];
     const tooBig: string[] = [];
+    const badType: string[] = [];
     for (const f of list) {
-      if (maxMb > 0 && f.size > maxMb * 1024 * 1024) tooBig.push(f.name);
+      if (allowed && !allowed.has(mimeOf(f))) badType.push(f.name);
+      else if (maxMb > 0 && f.size > maxMb * 1024 * 1024) tooBig.push(f.name);
       else ok.push(f);
     }
-    setFileError(tooBig.length ? `${tooBig.join(", ")} ${tooBig.length > 1 ? "are" : "is"} larger than ${maxMb} MB.` : null);
+    const notes: string[] = [];
+    if (badType.length) notes.push(`${names(badType)} not a supported file type.`);
+    if (tooBig.length) notes.push(`${names(tooBig)} larger than ${maxMb} MB.`);
+    setFileError(notes.length ? notes.join(" ") : null);
     if (ok.length) setFiles((prev) => [...prev, ...ok]);
   };
 
@@ -137,6 +170,7 @@ export function Composer() {
                 ref={fileRef}
                 type="file"
                 multiple
+                accept={allowedTypes?.join(",")}
                 hidden
                 tabIndex={-1}
                 onChange={(e) => {

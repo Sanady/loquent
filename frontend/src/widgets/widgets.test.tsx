@@ -219,3 +219,59 @@ describe("MessageList integration", () => {
     expect(btns[1]!.disabled).toBe(false);
   });
 });
+
+describe("widget answer contracts match the server (item 10)", () => {
+  it("select accepts plain-string options as {value:s,label:s}", () => {
+    const { answer } = setup(widget({ widget: "select", args: { message: "Pick", options: ["red", { value: "b", label: "Blue" }] } }));
+    fireEvent.click(screen.getByRole("radio", { name: "red" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+    expect(answer).toHaveBeenCalledWith("w1", { value: "red" });
+  });
+
+  it("a truthy but non-true multiple is a single select (server agrees)", () => {
+    setup(widget({ widget: "select", args: { message: "Pick", multiple: "yes", options: ["a", "b"] } }));
+    expect(screen.getAllByRole("radio")).toHaveLength(2);
+  });
+
+  it("a form whose required name is missing from properties falls back", () => {
+    setup(
+      widget({
+        widget: "form",
+        args: { message: "Odd", schema: { type: "object", properties: { a: { type: "string" } }, required: ["a", "b"] } },
+      }),
+    );
+    expect(screen.getByText(/can't be displayed/)).toBeTruthy();
+  });
+});
+
+describe("only the latest run's pending widget is interactive (item 15)", () => {
+  const renderItems = (items: Item[]) => {
+    const store: AppStore = readyStore({ view: view(items) });
+    render(
+      <StoreProvider store={store}>
+        <MessageList />
+      </StoreProvider>,
+    );
+  };
+
+  it("a pending widget before the last user message is not interactive", () => {
+    renderItems([
+      { kind: "message", id: "u0", role: "user", text: "first", attachments: [], streaming: false },
+      confirmItem({ id: "w1" }),
+      { kind: "message", id: "u1", role: "user", text: "never mind", attachments: [], streaming: false },
+      { kind: "message", id: "a1", role: "assistant", text: "ok", attachments: [], streaming: false },
+    ]);
+    const btn = screen.getByRole("button", { name: "Delete" }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  it("a pending widget after the last user message is interactive", () => {
+    renderItems([
+      { kind: "message", id: "u0", role: "user", text: "first", attachments: [], streaming: false },
+      confirmItem({ id: "w1", answer: { confirmed: true } }),
+      confirmItem({ id: "w2" }),
+    ]);
+    const btns = screen.getAllByRole("button", { name: "Delete" }) as HTMLButtonElement[];
+    expect(btns.at(-1)!.disabled).toBe(false);
+  });
+});

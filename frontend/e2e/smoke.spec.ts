@@ -11,6 +11,11 @@ async function send(page: Page, text: string) {
 const log = (page: Page) => page.getByRole("log", { name: "Conversation" });
 const threadButton = (page: Page, title: string) =>
   page.getByRole("navigation", { name: "Chats" }).getByRole("button", { name: title, exact: true });
+// A 1x1 transparent PNG.
+const PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "base64",
+);
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -45,8 +50,9 @@ test("stop", async ({ page }) => {
 test("reload mid-stream recovers", async ({ page }) => {
   await send(page, "slow reload");
   await expect(log(page).getByText(/part1 /)).toBeVisible();
+  await expect(page).toHaveURL(/#t=/);
   await page.reload();
-  await threadButton(page, "slow reload").click();
+  // No sidebar click: the open thread comes back from the URL hash.
   await expect(log(page).getByText(/Slow reply complete\./)).toBeVisible({ timeout: 10_000 });
   // Every part arrived exactly once, in order.
   const text = await log(page).innerText();
@@ -58,7 +64,33 @@ test("thread persists after reload", async ({ page }) => {
   await send(page, "remember me");
   await expect(log(page).getByText("Hello from Loquent")).toBeVisible();
   await page.reload();
-  await threadButton(page, "remember me").click();
+  // No sidebar click: the open thread comes back from the URL hash.
   await expect(log(page).getByText("remember me")).toBeVisible();
   await expect(log(page).getByText("Hello from Loquent")).toBeVisible();
+});
+
+test("an image with no text gets a reply", async ({ page }) => {
+  await page.locator("input[type=file]").setInputFiles({ name: "dot.png", mimeType: "image/png", buffer: PNG });
+  await expect(page.getByRole("list", { name: "Files to send" }).getByText("dot.png")).toBeVisible();
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(log(page).getByText("Hello from Loquent")).toBeVisible();
+  await expect(log(page).getByRole("button", { name: /dot\.png/ })).toBeVisible();
+  await expect(page.locator(".lq-error")).toHaveCount(0);
+  await expect(threadButton(page, "dot.png")).toBeVisible();
+});
+
+test("regenerate leaves exactly one assistant reply", async ({ page }) => {
+  await send(page, "regen please");
+  const first = log(page).getByText(/Reply #\d+/);
+  await expect(first).toBeVisible();
+  const before = await first.innerText();
+  await log(page).getByRole("button", { name: "Regenerate response" }).click();
+  await expect(log(page).getByText(before, { exact: true })).toHaveCount(0);
+  await expect(log(page).getByText(/Reply #\d+/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send message" })).toBeVisible();
+  await expect(log(page).locator(".lq-msg-assistant")).toHaveCount(1);
+  // And the stored thread agrees after a reload.
+  await page.reload();
+  await expect(log(page).getByText(/Reply #\d+/)).toBeVisible();
+  await expect(log(page).locator(".lq-msg-assistant")).toHaveCount(1);
 });

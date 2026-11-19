@@ -12,6 +12,7 @@ export const defaultConfig = (over: Partial<AppConfig> = {}): AppConfig => ({
   widgets: false,
   attachments: false,
   max_upload_mb: 20,
+  allowed_upload_types: ["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf", "text/plain", "text/markdown", "text/csv", "application/json"],
   ...over,
 });
 
