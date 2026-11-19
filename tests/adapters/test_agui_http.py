@@ -150,7 +150,8 @@ async def test_proxy_transport_failure_hides_details():
 
 
 async def test_proxy_does_not_close_injected_client():
-    client = httpx.AsyncClient(transport=httpx.MockTransport(ok(sse())))
+    body = sse(ev("RUN_STARTED", threadId="t", runId="r"), ev("RUN_FINISHED", threadId="t", runId="r"))
+    client = httpx.AsyncClient(transport=httpx.MockTransport(ok(body)))
     await run(AgUiHttpAdapter("https://agent.x.com/run", client=client))
     assert not client.is_closed
     await client.aclose()
@@ -160,3 +161,137 @@ def test_proxy_capabilities():
     a = AgUiHttpAdapter("https://agent.x.com/run")
     assert a.supports_widgets is True
     assert a.supports_attachments is False
+
+
+# --- chunk events -----------------------------------------------------------------------
+
+
+def brief(events):
+    out = []
+    for e in events:
+        d = e.model_dump(by_alias=True, exclude_none=True, mode="json")
+        d.pop("timestamp", None)
+        out.append(d)
+    return out
+
+
+async def test_text_chunks_expand_to_start_content_end():
+    body = sse(
+        ev("RUN_STARTED", threadId="t", runId="r"),
+        ev("TEXT_MESSAGE_CHUNK", messageId="m1", delta="Hel"),
+        ev("TEXT_MESSAGE_CHUNK", messageId="m1", delta="lo"),
+        ev("TEXT_MESSAGE_CHUNK", delta=" world"),  # no id: continues the open message
+        ev("TEXT_MESSAGE_CHUNK", messageId="m2", role="assistant", delta="Second"),
+        ev("RUN_FINISHED", threadId="t", runId="r"),
+    )
+    assert brief(await run(make(ok(body)))) == [
+        {"type": "TEXT_MESSAGE_START", "messageId": "m1", "role": "assistant"},
+        {"type": "TEXT_MESSAGE_CONTENT", "messageId": "m1", "delta": "Hel"},
+        {"type": "TEXT_MESSAGE_CONTENT", "messageId": "m1", "delta": "lo"},
+        {"type": "TEXT_MESSAGE_CONTENT", "messageId": "m1", "delta": " world"},
+        {"type": "TEXT_MESSAGE_END", "messageId": "m1"},
+        {"type": "TEXT_MESSAGE_START", "messageId": "m2", "role": "assistant"},
+        {"type": "TEXT_MESSAGE_CONTENT", "messageId": "m2", "delta": "Second"},
+        {"type": "TEXT_MESSAGE_END", "messageId": "m2"},
+    ]
+
+
+async def test_tool_call_chunks_expand_and_close_at_end_of_stream():
+    body = sse(
+        ev("TOOL_CALL_CHUNK", toolCallId="c1", toolCallName="search", parentMessageId="m0",
+           delta='{"q":'),
+        ev("TOOL_CALL_CHUNK", toolCallId="c1", delta='"x"}'),
+        ev("TOOL_CALL_CHUNK", delta=""),  # empty delta adds nothing
+    )  # fmt: skip
+    assert brief(await run(make(ok(body)))) == [
+        {"type": "TOOL_CALL_START", "toolCallId": "c1", "toolCallName": "search",
+         "parentMessageId": "m0"},
+        {"type": "TOOL_CALL_ARGS", "toolCallId": "c1", "delta": '{"q":'},
+        {"type": "TOOL_CALL_ARGS", "toolCallId": "c1", "delta": '"x"}'},
+        {"type": "TOOL_CALL_END", "toolCallId": "c1"},
+    ]  # fmt: skip
+
+
+async def test_chunks_interleave_with_other_events():
+    body = sse(
+        ev("TEXT_MESSAGE_CHUNK", messageId="m1", delta="Looking"),
+        ev("TOOL_CALL_CHUNK", toolCallId="c1", toolCallName="search", delta="{}"),
+        ev("TOOL_CALL_RESULT", messageId="r1", toolCallId="c1", content="found"),
+        ev("TEXT_MESSAGE_CHUNK", messageId="m2", delta="Done"),
+        ev("STEP_STARTED", stepName="s"),
+        ev("TEXT_MESSAGE_START", messageId="m3", role="assistant"),
+        ev("TEXT_MESSAGE_END", messageId="m3"),
+    )
+    assert types(await run(make(ok(body)))) == [
+        "TEXT_MESSAGE_START", "TEXT_MESSAGE_CONTENT", "TEXT_MESSAGE_END",
+        "TOOL_CALL_START", "TOOL_CALL_ARGS", "TOOL_CALL_END",
+        "TOOL_CALL_RESULT",
+        "TEXT_MESSAGE_START", "TEXT_MESSAGE_CONTENT", "TEXT_MESSAGE_END",
+        "STEP_STARTED",
+        "TEXT_MESSAGE_START", "TEXT_MESSAGE_END",
+    ]  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    "chunk",
+    [
+        ev("TEXT_MESSAGE_CHUNK", delta="orphan"),  # no id and nothing open
+        ev("TOOL_CALL_CHUNK", delta="{}"),
+        ev("TOOL_CALL_CHUNK", toolCallId="c1", delta="{}"),  # first chunk without a name
+    ],
+)
+async def test_chunk_that_cannot_open_is_invalid(chunk):
+    with pytest.raises(AgentError, match="invalid response"):
+        await run(make(ok(sse(chunk))))
+
+
+# --- redirects, statuses, empty streams ----------------------------------------------------
+
+
+async def test_redirect_is_followed_keeping_the_post():
+    seen = []
+    body = sse(ev("TEXT_MESSAGE_START", messageId="m", role="assistant"))
+
+    def handler(request):
+        seen.append((request.method, request.url.path, request.content))
+        if request.url.path == "/agent":
+            return httpx.Response(307, headers={"location": "/agent/"})
+        return httpx.Response(200, content=body, headers={"content-type": "text/event-stream"})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    events = await run(AgUiHttpAdapter("https://agent.x.com/agent", client=client))
+    assert types(events) == ["TEXT_MESSAGE_START"]
+    assert [(m, p) for m, p, _ in seen] == [("POST", "/agent"), ("POST", "/agent/")]
+    assert seen[0][2] == seen[1][2]
+
+
+@pytest.mark.parametrize("status", [300, 304, 101])
+async def test_final_non_2xx_status_is_an_error(status):
+    def handler(request):
+        return httpx.Response(status)
+
+    with pytest.raises(AgentError) as ei:
+        await run(make(handler))
+    assert str(ei.value) == f"Upstream agent returned HTTP {status}"
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b"",
+        b": keepalive only\n\n",
+        sse(ev("RUN_STARTED", threadId="t", runId="r")),
+    ],
+)
+async def test_stream_without_any_events_is_invalid(raw):
+    def handler(request):
+        return httpx.Response(200, content=raw, headers={"content-type": "text/event-stream"})
+
+    with pytest.raises(AgentError) as ei:
+        await run(make(handler))
+    assert str(ei.value) == "Upstream agent returned an invalid response"
+
+
+async def test_finished_run_with_no_content_is_a_valid_empty_reply():
+    body = sse(ev("RUN_STARTED", threadId="t", runId="r"), ev("RUN_FINISHED", threadId="t", runId="r"))
+    assert await run(make(ok(body))) == []

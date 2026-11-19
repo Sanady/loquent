@@ -317,3 +317,43 @@ async def test_text_then_transport_error_closes_text_message():
             got.append(e)
     assert str(ei.value) == "Could not reach the model endpoint"
     assert types(got) == ["TEXT_MESSAGE_START", "TEXT_MESSAGE_CONTENT", "TEXT_MESSAGE_END"]
+
+
+async def test_400_with_tools_retries_once_without_tools(caplog):
+    seen = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        seen.append(body)
+        if "tools" in body:
+            return httpx.Response(400, json={"error": "tools not supported"})
+        return httpx.Response(
+            200, content=sse(delta(content="plain")), headers={"content-type": "text/event-stream"}
+        )
+
+    with caplog.at_level("WARNING", logger="loquent.adapters"):
+        events = await run(make(handler), tools=WIDGET_TOOLS)
+    assert [e.type.value for e in events] == [
+        "TEXT_MESSAGE_START", "TEXT_MESSAGE_CONTENT", "TEXT_MESSAGE_END",
+    ]  # fmt: skip
+    assert len(seen) == 2 and "tools" in seen[0] and "tools" not in seen[1]
+    assert seen[0]["messages"] == seen[1]["messages"]
+    warnings = [r for r in caplog.records if r.name == "loquent.adapters"]
+    assert len(warnings) == 1 and warnings[0].levelname == "WARNING"
+    assert "without tools" in warnings[0].getMessage()
+
+
+async def test_400_retry_happens_only_once_and_only_with_tools():
+    seen = []
+
+    def handler(request):
+        seen.append(json.loads(request.content))
+        return httpx.Response(400, json={"error": "nope"})
+
+    with pytest.raises(AgentError, match="HTTP 400"):
+        await run(make(handler), tools=WIDGET_TOOLS)
+    assert len(seen) == 2
+    seen.clear()
+    with pytest.raises(AgentError, match="HTTP 400"):
+        await run(make(handler), tools=[])
+    assert len(seen) == 1

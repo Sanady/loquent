@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 from collections.abc import AsyncIterator, Callable
 from typing import Any
@@ -38,11 +39,25 @@ def _arity(fn: Callable) -> int:
     return n
 
 
+_STOP = object()
+
+
+def _is_async(fn: Callable) -> bool:
+    """Coroutine or async generator function (also as a partial or an async __call__)."""
+    for f in (fn, getattr(fn, "__call__", None)):  # noqa: B004 - callable objects too
+        if f is not None and (inspect.iscoroutinefunction(f) or inspect.isasyncgenfunction(f)):
+            return True
+    return False
+
+
 async def _aclose(gen: Any) -> None:
     if hasattr(gen, "aclose"):
         await gen.aclose()
     elif hasattr(gen, "close"):
-        gen.close()
+        try:
+            await asyncio.to_thread(gen.close)  # finally blocks may block too
+        except ValueError:
+            pass  # "generator already executing": a step abandoned mid-run is still in its thread
 
 
 class FunctionAdapter:
@@ -52,9 +67,13 @@ class FunctionAdapter:
     def __init__(self, fn: Callable) -> None:
         self._arity = _arity(fn)
         self._fn = fn
+        self._async = _is_async(fn)
 
     async def _items(self, input: RunAgentInput, ctx: RunContext) -> AsyncIterator[Any]:
-        result = self._fn(ctx.messages) if self._arity == 1 else self._fn(ctx.messages, ctx)
+        args = (ctx.messages,) if self._arity == 1 else (ctx.messages, ctx)
+        # Sync code runs in a worker thread (the call and each step of a sync iterator), so a
+        # blocking agent never stalls the event loop. Async code runs on the loop as is.
+        result = await self._call(*args)
         if inspect.isawaitable(result):
             result = await result
         if result is None:
@@ -67,12 +86,21 @@ class FunctionAdapter:
                     yield item
             finally:
                 await _aclose(result)
+        elif isinstance(result, (list, tuple)):
+            for item in result:
+                yield item
         else:
+            it = await asyncio.to_thread(iter, result)
             try:
-                for item in result:
+                while (item := await asyncio.to_thread(next, it, _STOP)) is not _STOP:
                     yield item
             finally:
-                await _aclose(result)
+                await _aclose(it)
+
+    async def _call(self, *args: Any) -> Any:
+        if self._async:
+            return self._fn(*args)
+        return await asyncio.to_thread(self._fn, *args)
 
     async def run(self, input: RunAgentInput, ctx: RunContext) -> AsyncIterator[BaseEvent]:
         open_id: str | None = None

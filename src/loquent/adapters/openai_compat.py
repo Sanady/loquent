@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
@@ -23,6 +25,8 @@ from ag_ui.core import (
 from loquent.adapters.base import AgentError
 from loquent.context import RunContext
 from loquent.protocol import new_id
+
+log = logging.getLogger("loquent.adapters")
 
 _INVALID = "Upstream model returned an invalid response"
 _TEXT_ROLES = ("user", "system", "developer")
@@ -114,6 +118,23 @@ class OpenAICompatAdapter:
         self._api_key = api_key
         self._client = client or httpx.AsyncClient(timeout=httpx.Timeout(60, connect=10))
 
+    @asynccontextmanager
+    async def _open(self, body: dict[str, Any], headers: dict[str, str]):
+        """POST the request. A 400 to a request that carried tools is retried once without
+        them: some backends (Ollama models without tool support, vLLM without auto tool
+        choice) reject tools outright."""
+        async with self._client.stream("POST", self._url, json=body, headers=headers) as resp:
+            if not (resp.status_code == 400 and "tools" in body):
+                yield resp
+                return
+        log.warning(
+            "model endpoint answered HTTP 400 to a request with tools; retrying without tools "
+            "(widgets are unavailable; pass --no-widgets or LOQUENT_WIDGETS=false to skip this)"
+        )
+        plain = {k: v for k, v in body.items() if k != "tools"}
+        async with self._client.stream("POST", self._url, json=plain, headers=headers) as resp:
+            yield resp
+
     async def run(self, input: RunAgentInput, ctx: RunContext) -> AsyncIterator[BaseEvent]:
         body: dict[str, Any] = {
             "model": self._model,
@@ -132,9 +153,7 @@ class OpenAICompatAdapter:
         finished = False
         error: str | None = None
         try:
-            async with self._client.stream(
-                "POST", self._url, json=body, headers=headers
-            ) as resp:
+            async with self._open(body, headers) as resp:
                 if resp.status_code >= 400:
                     raise AgentError(f"Upstream model returned HTTP {resp.status_code}")
                 async for line in resp.aiter_lines():

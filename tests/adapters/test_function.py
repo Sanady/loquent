@@ -117,3 +117,68 @@ async def test_passthrough_base_events():
     assert step in ev
     assert types(ev).count("TEXT_MESSAGE_START") == 2
     assert types(ev)[:3] == ["TEXT_MESSAGE_START", "TEXT_MESSAGE_CONTENT", "TEXT_MESSAGE_END"]
+
+
+async def _ticks_while(coro_fn):
+    """Run ``coro_fn()`` while a 10 ms ticker counts how often the event loop got to run."""
+    import asyncio
+
+    ticks = 0
+    done = False
+
+    async def ticker():
+        nonlocal ticks
+        while not done:
+            await asyncio.sleep(0.01)
+            ticks += 1
+
+    t = asyncio.create_task(ticker())
+    try:
+        result = await coro_fn()
+    finally:
+        done = True
+        await t
+    return result, ticks
+
+
+async def test_sync_function_does_not_block_the_event_loop():
+    import time
+
+    def slow(messages):
+        time.sleep(0.3)
+        return "done"
+
+    ev, ticks = await _ticks_while(lambda: collect(FunctionAdapter(slow)))
+    assert ev[1].delta == "done"
+    assert ticks >= 10  # a blocked loop would tick at most once or twice
+
+
+async def test_sync_generator_steps_do_not_block_the_event_loop():
+    import threading
+    import time
+
+    threads = set()
+
+    def slow_gen(messages):
+        for part in ("a", "b", "c"):
+            threads.add(threading.get_ident())
+            time.sleep(0.1)
+            yield part
+
+    ev, ticks = await _ticks_while(lambda: collect(FunctionAdapter(slow_gen)))
+    assert [e.delta for e in ev if e.type.value == "TEXT_MESSAGE_CONTENT"] == ["a", "b", "c"]
+    assert ticks >= 10
+    assert threading.get_ident() not in threads
+
+
+async def test_async_function_runs_on_the_loop_thread():
+    import threading
+
+    seen = {}
+
+    async def fn(messages):
+        seen["thread"] = threading.get_ident()
+        return "x"
+
+    await collect(FunctionAdapter(fn))
+    assert seen["thread"] == threading.get_ident()
