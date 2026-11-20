@@ -309,9 +309,22 @@ jobs:
       - run: uv sync --locked
       - run: uv run pytest -q -m slow
 
+  release-config:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
+          package-manager-cache: false
+      - run: node scripts/check_release_lockfile.mjs
+
   ci-ok:
     if: always()
-    needs: [lint, pr-title, frontend, test, mongo, e2e, build, wheel-smoke, slow]
+    needs: [lint, pr-title, frontend, test, mongo, e2e, build, wheel-smoke, slow, release-config]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
