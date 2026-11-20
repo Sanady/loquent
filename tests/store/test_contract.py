@@ -84,6 +84,19 @@ async def test_stale_run_is_deterministic_under_a_frozen_clock(store: Store, mon
     assert (await store.create_run(t.id, stale_after_s=-1)).status == "running"
 
 
+async def test_list_threads_order_is_deterministic_under_a_frozen_clock(store: Store, monkeypatch):
+    frozen = datetime(2026, 1, 1, tzinfo=UTC)
+    monkeypatch.setattr(sys.modules[type(store).__module__], "_now", lambda: frozen)
+    u = await store.create_user("a", "h")
+    t1 = await store.create_thread(u.id, "one")
+    t2 = await store.create_thread(u.id, "two")
+    assert [t.id for t in await store.list_threads(u.id)] == [t2.id, t1.id]
+    await store.rename_thread(t1.id, "renamed")
+    assert [t.id for t in await store.list_threads(u.id)] == [t1.id, t2.id]
+    await store.create_run(t2.id)
+    assert [t.id for t in await store.list_threads(u.id)] == [t2.id, t1.id]
+
+
 async def test_concurrent_create_run_exactly_one_wins(store: Store):
     t = await _thread(store)
     results = await asyncio.gather(
@@ -190,3 +203,31 @@ async def test_file_meta_roundtrip(store: Store):
     await store.save_file_meta(meta)
     assert await store.get_file_meta("f1") == meta
     assert await store.get_file_meta("nope") is None
+
+
+async def test_sqlite_init_migrates_threads_without_ord(tmp_path):
+    import aiosqlite
+
+    from loquent.store.sqlite import SqliteStore
+
+    path = str(tmp_path / "old.db")
+    async with aiosqlite.connect(path) as db:
+        await db.executescript(
+            "CREATE TABLE threads (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, "
+            "title TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);"
+            "INSERT INTO threads VALUES ('t','o','old','2026-01-01T00:00:00+00:00',"
+            "'2026-01-01T00:00:00+00:00');"
+        )
+        await db.commit()
+    store = SqliteStore(path)
+    await store.init()
+    try:
+        cols = [
+            r[1] for r in await (await store.db.execute("PRAGMA table_info(threads)")).fetchall()
+        ]
+        assert "ord" in cols
+        assert [t.id for t in await store.list_threads("o")] == ["t"]
+        await store.rename_thread("t", "new")
+        assert (await store.get_thread("t")).title == "new"
+    finally:
+        await store.close()
