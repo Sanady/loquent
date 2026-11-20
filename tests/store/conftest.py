@@ -6,10 +6,26 @@ import pytest
 from loquent.store.sqlite import SqliteStore
 
 
+def _unusable(reason: str) -> None:
+    """No MongoDB: fail under CI (a skipped contract run must never look green), else skip."""
+    if os.environ.get("CI"):
+        pytest.fail(reason, pytrace=False)
+    pytest.skip(reason)
+
+
 @pytest.fixture(scope="session")
 def mongo_url():
     url = os.environ.get("LOQUENT_TEST_MONGO_URL")
     if url:
+        from pymongo import MongoClient
+
+        client = MongoClient(url, serverSelectionTimeoutMS=2000)
+        try:
+            client.admin.command("ping")
+        except Exception as e:  # noqa: BLE001
+            _unusable(f"LOQUENT_TEST_MONGO_URL is set but MongoDB is unreachable: {e}")
+        finally:
+            client.close()
         yield url
         return
     mongod = None
@@ -22,7 +38,7 @@ def mongo_url():
     except Exception as e:  # noqa: BLE001
         if mongod is not None:
             mongod.stop()
-        pytest.skip(
+        _unusable(
             "no usable MongoDB (set LOQUENT_TEST_MONGO_URL, or allow the pymongo-inmemory "
             f"mongod download; note it ships mongod <=4.0): {e}"
         )
@@ -32,7 +48,7 @@ def mongo_url():
         mongod.stop()
 
 
-@pytest.fixture(params=["sqlite", "mongo"])
+@pytest.fixture(params=["sqlite", pytest.param("mongo", marks=pytest.mark.mongo)])
 async def store(request):
     if request.param == "sqlite":
         s = SqliteStore(":memory:")
