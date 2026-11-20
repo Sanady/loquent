@@ -38,9 +38,11 @@ class ClientForbidden(Exception):
 
 
 def is_loopback(host: str | None) -> bool:
-    """True for 127.0.0.0/8, ::1 and IPv4-mapped loopback; anything unparsable is not."""
+    """True for 127.0.0.0/8, ::1, IPv4-mapped loopback and the literal `testclient`; else False."""
     if not host:
         return False
+    if host == "testclient":  # Starlette's TestClient; exact and case-sensitive
+        return True
     try:
         ip = ipaddress.ip_address(host.strip("[]"))
     except ValueError:

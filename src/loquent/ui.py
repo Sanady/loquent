@@ -44,7 +44,7 @@ class Confirm:
 @dataclass
 class Select:
     message: str
-    options: list[str | tuple[str, str]]
+    options: list[str | tuple[str, str] | list[str]]
     multiple: bool = False
     key: str | None = None
 
@@ -58,7 +58,7 @@ class Select:
             if isinstance(o, str):
                 values.append(o)
             elif (
-                isinstance(o, tuple)
+                isinstance(o, (tuple, list))
                 and len(o) == 2
                 and isinstance(o[0], str)
                 and isinstance(o[1], str)
@@ -225,7 +225,7 @@ def _option_values(options: Any) -> list[str]:
             values.append(o)
         elif isinstance(o, dict) and isinstance(o.get("value"), str):
             values.append(o["value"])
-        elif isinstance(o, (list, tuple)) and o and isinstance(o[0], str):
+        elif isinstance(o, (list, tuple)) and len(o) == 2 and all(isinstance(x, str) for x in o):
             values.append(o[0])
         else:
             raise InvalidAnswer("widget options are malformed")

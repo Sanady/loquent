@@ -99,7 +99,8 @@ store still opens lazily on the first request; the hook adds a clean shutdown.
 `loquent.serve` and `loquent serve` refuse to bind a public address with `auth=none`. When
 you run `App` under your own server (uvicorn, gunicorn), `App` still protects itself: with
 `auth=none` it answers `403 {"error": "forbidden"}` to every API request from a client that
-is not on loopback (`127.0.0.0/8`, `::1`), unless you set `insecure_no_auth=True`. With
+is not on loopback (`127.0.0.0/8`, `::1`), unless you set `insecure_no_auth=True`. Starlette's
+`TestClient` (host `testclient`) counts as local. With
 `auth="password"`, `App(...)` raises `InsecureConfigError` unless `secret_key` is set, so
 every worker signs sessions with the same key.
 

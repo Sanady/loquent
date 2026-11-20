@@ -756,6 +756,29 @@ describe("the open thread lives in location.hash (item 3)", () => {
     expect(location.hash).toBe("");
   });
 
+  it("restoreThread does not open the hash thread while a send is starting", async () => {
+    history.replaceState(null, "", "/#t=t1");
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const thread = vi.fn(async () => detail([], null));
+    const api = fakeApi({
+      thread,
+      startRun: vi.fn(() =>
+        (async function* () {
+          await gate;
+          yield* seqd([started(), { type: "RUN_FINISHED" }]);
+        })(),
+      ),
+    });
+    const s = createAppStore(api);
+    const p = s.getState().send("a", []);
+    expect(s.getState().starting).toBe(true);
+    await s.getState().login("u", "p");
+    expect(thread).not.toHaveBeenCalled();
+    release();
+    await p;
+  });
+
   it("login in password mode reopens the hash thread", async () => {
     history.replaceState(null, "", "/#t=t1");
     const thread = vi.fn(async () => detail([], null));

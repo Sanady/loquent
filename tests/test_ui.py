@@ -197,3 +197,16 @@ def test_form_accepts_supported_schema():
             "required": ["s", "e"],
         },
     )
+
+
+def test_select_accepts_list_pairs():
+    assert Select("Pick", [["pro", "Pro plan"], "basic"]).args()["options"] == [
+        {"value": "pro", "label": "Pro plan"},
+        {"value": "basic", "label": "basic"},
+    ]
+
+
+def test_validate_answer_accepts_value_from_list_pair():
+    validate_answer(
+        "loquent_select", {"message": "m", "options": [["pro", "Pro"]]}, {"value": "pro"}
+    )
