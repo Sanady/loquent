@@ -11,7 +11,18 @@ from loquent.cli import main
 from loquent.settings import Settings
 
 README = (Path(__file__).resolve().parent.parent / "README.md").read_text(encoding="utf-8")
-FLAG = re.compile(r"(?<![\w-])--[a-z][a-z-]*")
+FLAG = re.compile(r"(?<![\w-])--(?!lq-)[a-z][a-z-]*")  # `--lq-*` are CSS variables, not flags
+# Flags of other tools' command lines that the README shows. Each belongs to the named tool.
+FOREIGN_FLAGS = {
+    "--enable-auto-tool-choice",  # vllm serve
+    "--tool-call-parser",  # vllm serve
+    "--api-key",  # vllm serve
+    "--prefix",  # npm --prefix frontend
+    "--run",  # npm test -- --run (vitest)
+}
+RAW_SCREENSHOT = (
+    "https://raw.githubusercontent.com/Sanady/loquent/main/docs/assets/loquent-chat.png"
+)
 
 
 def _help(capsys, *argv: str) -> str:
@@ -45,6 +56,13 @@ def test_every_documented_cli_flag_exists(capsys):
             ), f"{flag.group()} (README line {line!r}) is not a flag of {owners}"
             checked += 1
     assert checked >= 5
+
+    # Every flag anywhere in the README is a Loquent flag or a known flag of another tool.
+    ours = "\n".join(helps.values())
+    for flag in set(FLAG.findall(README)):
+        assert flag in FOREIGN_FLAGS or re.search(rf"(?<![\w-]){flag}(?![\w-])", ours), (
+            f"{flag} is neither a loquent flag nor in FOREIGN_FLAGS"
+        )
 
     # The settings table's "CLI flag" column names `loquent serve` flags too.
     rows = [line for line in README.splitlines() if re.match(r"\| `\w+` \| `LOQUENT_", line)]
@@ -98,8 +116,8 @@ def test_python_imports_resolve():
     [
         "## Quickstart",
         "## Coming from Chainlit?",
-        "## Use with your stack",
-        "## Comparison",
+        "## Use with OpenAI, Ollama, vLLM and AG-UI agents",
+        "## Loquent vs Chainlit, Gradio and Open WebUI",
         "## FAQ",
     ],
 )
@@ -112,7 +130,26 @@ def test_badges_and_screenshot():
     assert "img.shields.io/pypi/v/loquent" in README
     assert "img.shields.io/pypi/pyversions/loquent" in README
     assert "img.shields.io/github/license/Sanady/loquent" in README
-    assert re.search(r"!\[[^\]]{20,}\]\(docs/assets/loquent-chat\.png\)", README)
+    assert re.search(rf"!\[[^\]]{{20,}}\]\({re.escape(RAW_SCREENSHOT)}\)", README)
     shot = Path(__file__).resolve().parent.parent / "docs" / "assets" / "loquent-chat.png"
     assert shot.is_file()
     assert shot.stat().st_size < 400 * 1024
+
+
+def test_links_are_absolute_or_anchors():
+    # PyPI renders the README too, and it resolves no relative links or images.
+    prose = re.sub(r"^```.*?^```", "", README, flags=re.DOTALL | re.MULTILINE)
+    targets = re.findall(r"\]\(([^)\s]*)", prose)
+    assert len(targets) >= 10
+    bad = [t for t in targets if not t.startswith(("http://", "https://", "#"))]
+    assert not bad, f"relative link targets: {bad}"
+
+
+def test_in_page_anchors_resolve():
+    def slug(heading: str) -> str:  # GitHub's heading anchors
+        return re.sub(r"[^\w\- ]", "", heading.strip().lower()).replace(" ", "-")
+
+    prose = re.sub(r"^```.*?^```", "", README, flags=re.DOTALL | re.MULTILINE)
+    anchors = {slug(h) for h in re.findall(r"^#{1,6} (.+)$", prose, flags=re.MULTILINE)}
+    for target in re.findall(r"\]\(#([^)\s]*)", prose):
+        assert target in anchors, f"#{target} matches no heading"

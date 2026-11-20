@@ -5,7 +5,7 @@
 [![CI](https://github.com/Sanady/loquent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Sanady/loquent/actions/workflows/ci.yml)
 [![PyPI version](https://img.shields.io/pypi/v/loquent)](https://pypi.org/project/loquent/)
 [![Python versions](https://img.shields.io/pypi/pyversions/loquent)](https://pypi.org/project/loquent/)
-[![License](https://img.shields.io/github/license/Sanady/loquent)](LICENSE)
+[![License](https://img.shields.io/github/license/Sanady/loquent)](https://github.com/Sanady/loquent/blob/main/LICENSE)
 
 Loquent gives your LLM app or AI agent a polished, streaming chat interface: point it at a
 Python function, an OpenAI-compatible API (OpenAI, Ollama, vLLM, LiteLLM) or any
@@ -14,7 +14,7 @@ need. It is an open-source alternative to Chainlit that speaks AG-UI, the open a
 protocol, and lets the agent draw UI (approve/reject buttons, choices, forms) in the middle
 of a conversation.
 
-![Loquent chat UI in the light theme: a sidebar with the chat list, a streamed assistant reply, and an agent-drawn "Refund $42?" confirm widget with Approve and Reject buttons](docs/assets/loquent-chat.png)
+![Loquent chat UI in the light theme: a sidebar with the chat list, a streamed assistant reply, and an agent-drawn "Refund $42?" confirm widget with Approve and Reject buttons](https://raw.githubusercontent.com/Sanady/loquent/main/docs/assets/loquent-chat.png)
 
 ## Why Loquent
 
@@ -27,8 +27,8 @@ of a conversation.
   load balancer on a shared MongoDB. It refuses to serve the public without sign-in, keeps
   API keys on the server, and ships a strict Content Security Policy and CSRF protection.
 - **No Node needed.** The wheel contains the prebuilt React UI. Threads, history, stop and
-  regenerate, Markdown with code and math, file uploads, light and dark themes, and optional
-  password sign-in all come with it.
+  regenerate, Markdown with code and math, light and dark themes, optional password
+  sign-in, and file uploads for agents written as Python functions all come with it.
 
 ## Quickstart
 
@@ -36,7 +36,7 @@ of a conversation.
 pip install loquent
 ```
 
-Python 3.11 or newer. The wheel contains the prebuilt UI, so you don't need Node.
+Python 3.11 or newer.
 
 Pick whichever form fits what you already have. Each one serves the UI at
 http://127.0.0.1:8000.
@@ -124,27 +124,36 @@ async def agent(messages):
 
 Two differences to plan for:
 
-- **An ask ends the run.** Chainlit's `await cl.AskActionMessage(...)` pauses your handler
+- **An ask ends the run.** Chainlit's `await cl.AskActionMessage(...).send()` pauses your handler
   until the user answers. In Loquent, `yield ui.ask(...)` ends the run, and your function is
   called again with the answer. Keep side effects behind the `ctx.answer` check.
 - **No session object.** There is no `cl.user_session`. Key any state you keep by
   `ctx.thread_id` or `ctx.user.id`.
 
-What release 1 does not have yet: OAuth/OIDC sign-in, Postgres storage, built-in adapters
-for agent frameworks (LangGraph, Pydantic AI, OpenAI Agents SDK; frameworks that already
-expose an AG-UI endpoint work today through its URL), a file-request widget like
-`AskFileMessage`, table and chart widgets, and an importer for threads stored by Chainlit.
+What release 1 does not have yet, among others:
 
-## Use with your stack
+- lifecycle hooks such as `@cl.on_chat_start`, welcome messages and starters
+- chat settings and chat profiles (`cl.ChatSettings`)
+- message feedback
+- audio
+- rich elements such as `cl.Image`, `cl.Pdf` and `cl.Plotly`, and a file-request widget
+  like `cl.AskFileMessage`
+- OAuth/OIDC sign-in and Postgres storage
+- built-in adapters for agent frameworks (LangGraph, Pydantic AI, OpenAI Agents SDK);
+  frameworks that already expose an AG-UI endpoint work today through its URL
+- an importer for threads stored by Chainlit
+
+## Use with OpenAI, Ollama, vLLM and AG-UI agents
+
+Agents behind a URL (the OpenAI-compatible and AG-UI adapters below) don't take file
+attachments, so the UI hides the attach button for them. To accept uploads, write the agent
+as a [plain Python function](#a-plain-python-function-any-sdk-or-framework) or a
+[custom adapter](#a-custom-adapter) and read them from `ctx.files`.
 
 ### OpenAI or any OpenAI-compatible API
 
-```bash
-export OPENAI_API_KEY=...
-loquent serve https://api.openai.com/v1 --model gpt-4o --api-key-env OPENAI_API_KEY
-```
-
-From Python, the same settings are keyword arguments:
+The [quickstart](#quickstart) shows the command line. From Python, the same settings are
+keyword arguments:
 
 ```python
 import os
@@ -166,15 +175,12 @@ ollama pull llama3.2
 loquent serve http://localhost:11434/v1 --model llama3.2
 ```
 
-Loquent offers its [widget tools](#interactive-widgets) to the model. If the model you pull
-has no tool support, add `--no-widgets` so no tools are sent:
+If the model you pull has no tool support, add `--no-widgets`
+([why](#interactive-widgets)):
 
 ```bash
 loquent serve http://localhost:11434/v1 --model llama3.2 --no-widgets
 ```
-
-Without the flag, if the endpoint answers HTTP 400 to a request that carried tools, Loquent
-retries it once without tools and logs a warning.
 
 ### vLLM
 
@@ -186,9 +192,10 @@ vllm serve Qwen/Qwen2.5-7B-Instruct --port 8001
 loquent serve http://localhost:8001/v1 --model Qwen/Qwen2.5-7B-Instruct --no-widgets
 ```
 
-vLLM rejects tool calls unless it was started with `--enable-auto-tool-choice` and a
-`--tool-call-parser` that fits the model. Start it that way and drop `--no-widgets` to get
-the widgets. If you started vLLM with `--api-key`, pass the key with `--api-key-env`.
+vLLM rejects requests with tools unless it was started with `--enable-auto-tool-choice`
+and a `--tool-call-parser` that fits the model ([why that matters](#interactive-widgets)).
+Start it that way and drop `--no-widgets` to get the widgets. If you started vLLM with
+`--api-key`, pass the key with `--api-key-env`.
 
 ### Any AG-UI agent (LangGraph, Pydantic AI and others)
 
@@ -236,7 +243,7 @@ if __name__ == "__main__":
 Sync functions and sync generators work too; Loquent runs them in a worker thread so they
 never block the server.
 
-## Comparison
+## Loquent vs Chainlit, Gradio and Open WebUI
 
 How Loquent compares with other ways to put a chat UI on an LLM. Claims about other projects
 are kept conservative; "—" means we haven't verified it.
@@ -247,7 +254,7 @@ are kept conservative; "—" means we haven't verified it.
 | Install | `pip install loquent` | `pip install chainlit` | `pip install gradio` | `pip install open-webui` or Docker |
 | Agent-drawn UI (confirm, select, form) | Yes | Ask messages (text, actions, files) | — | — |
 | AG-UI protocol | Yes | — | — | — |
-| Multiple replicas | Yes (shared MongoDB) | — | — | — |
+| Multiple replicas | Yes (shared MongoDB) | — | — | Yes (Postgres + Redis) |
 | Self-hosted auth | Password, or your own authenticator | Password, OAuth and header callbacks | Basic username/password | Built-in user accounts |
 | Maintenance status | Active (alpha) | Archived 2026-10-15 | — | — |
 
@@ -363,9 +370,10 @@ store still opens lazily on the first request; the hook adds a clean shutdown.
 you run `App` under your own server (uvicorn, gunicorn), `App` still protects itself: with
 `auth=none` it answers `403 {"error": "forbidden"}` to every API request from a client that
 is not on loopback (`127.0.0.0/8`, `::1`), unless you set `insecure_no_auth=True`. Starlette's
-`TestClient` (host `testclient`) counts as local. With
-`auth="password"`, `App(...)` raises `InsecureConfigError` unless `secret_key` is set, so
-every worker signs sessions with the same key.
+`TestClient` (host `testclient`) counts as local. Behind a reverse proxy this check is only
+as good as the client address the proxy reports, so use `auth="password"` there (see
+[Security defaults](#security-defaults)). With `auth="password"`, `App(...)` raises
+`InsecureConfigError` unless `secret_key` is set, so every worker signs sessions with the same key.
 
 ## Storage
 
@@ -408,8 +416,13 @@ cross-site embeds; embed it on the same site, or put your own sign-in in front o
 - **No accidental public servers.** With `auth=none`, Loquent refuses to bind to anything
   but localhost, and answers `403 forbidden` to API requests from any client that is not on
   loopback (`127.0.0.0/8`, `::1`), unless you pass `--insecure-no-auth`
-  (`insecure_no_auth=True`). Behind a trusted proxy the client is the forwarded address, so
-  a public visitor reaching a no-auth Loquent through a proxy is refused too.
+  (`insecure_no_auth=True`). **Behind a reverse proxy, use `--auth password`**, and don't
+  rely on `auth=none` there. The loopback rule judges the client address the proxy reports, so it protects you only if the
+  proxy sets or appends the real client IP in `X-Forwarded-For`. A proxy on the same host
+  that sends no `X-Forwarded-For` (nginx `proxy_pass` adds none by default) makes every
+  visitor look like `127.0.0.1`, and a trusted proxy that passes a client-supplied
+  `X-Forwarded-For` through unmodified lets clients spoof their address, `127.0.0.1`
+  included.
 - **API keys stay on the server.** Backend URLs and keys are never sent to the browser.
 - **Signed file URLs.** Uploads are never public. The UI fetches them through signed URLs
   that expire after 5 minutes.
@@ -425,9 +438,8 @@ cross-site embeds; embed it on the same site, or put your own sign-in in front o
   `allowed_upload_types`.
 - **Behind a TLS proxy**, list the proxy's address with `--forwarded-allow-ips` (or
   `LOQUENT_FORWARDED_ALLOW_IPS`) so client addresses and the `https` scheme come from the
-  `X-Forwarded-*` headers. Only `127.0.0.1` is trusted by default. Use a proxy that sets or
-  appends the real client IP to `X-Forwarded-For`: a trusted proxy that passes a
-  client-supplied `X-Forwarded-For` through unmodified lets clients spoof their address.
+  `X-Forwarded-*` headers. Only `127.0.0.1` is trusted by default, so a proxy on the same
+  host is trusted without configuration.
 
 ## Deployment
 
@@ -440,6 +452,8 @@ the run to the end. To run several replicas:
   `gunicorn -w N`). Without it each process signs sessions and file URLs with its own random
   key, so they fail on the other processes.
 - point `LOQUENT_FILES_DIR` at storage every replica can read, such as a shared volume
+- sign users in with `--auth password` or your own authenticator: replicas sit behind a
+  load balancer, where `auth=none` is not safe (see [Security defaults](#security-defaults))
 
 Also:
 
@@ -639,15 +653,23 @@ other frameworks with AG-UI support. If your framework has none, call it from a
 
 For many Chainlit apps, yes: streaming chat, threads and history, steps, ask-the-user
 widgets, file uploads, password sign-in and a persistent data store all have a Loquent
-counterpart. OAuth sign-in, Postgres storage and some Chainlit elements don't exist yet.
-See [Coming from Chainlit?](#coming-from-chainlit) for the mapping and the gaps.
+counterpart. Some Chainlit features don't exist yet, among them OAuth sign-in, Postgres
+storage, chat settings, message feedback, audio and rich elements. See
+[Coming from Chainlit?](#coming-from-chainlit) for the mapping and the full list of gaps.
 
 ### Does Loquent work with Ollama or other local LLMs?
 
 Yes. Ollama, vLLM, LiteLLM and other servers with an OpenAI-compatible
 `/chat/completions` endpoint work with `--model`, for example
-`loquent serve http://localhost:11434/v1 --model llama3.2`. Add `--no-widgets` for models
-without tool support. See [Ollama](#ollama-local-llms).
+`loquent serve http://localhost:11434/v1 --model llama3.2`. See [Ollama](#ollama-local-llms)
+for models without tool support.
+
+### Can users upload files to the chatbot?
+
+Yes, when the agent is a Python function or a custom adapter: it reads the files from
+`ctx.files`. Agents behind a URL (OpenAI-compatible or AG-UI) don't take attachments, and
+the UI hides the attach button for them. Size and type limits are `max_upload_mb` and
+`allowed_upload_types`.
 
 ### Can I deploy Loquent with multiple replicas?
 
@@ -668,8 +690,7 @@ Yes. `loquent.App` is an ASGI app: mount it with `api.mount("/chat", App(agent))
 
 ### Do I need Node.js or React?
 
-No. The wheel ships the prebuilt UI. You need Node only to work on Loquent's frontend
-itself.
+No. You need Node only to work on Loquent's frontend itself.
 
 ### Does my API key reach the browser?
 
@@ -687,6 +708,11 @@ No. Backend URLs and API keys stay on the server; the browser only talks to Loqu
   adapters for agent frameworks (LangGraph, Pydantic AI, OpenAI Agents SDK), and the
   `table`, `chart`, `file_request` and custom widgets. These are planned for release 2.
   Frameworks that already expose an AG-UI endpoint work today through its URL.
+- **Also missing:** start-of-chat hooks, welcome messages and starters, chat settings and
+  profiles, message feedback, audio, and rich media elements. See
+  [Coming from Chainlit?](#coming-from-chainlit).
+- **File uploads need a Python agent.** The OpenAI-compatible and AG-UI URL adapters don't
+  take attachments.
 
 ## Development
 
@@ -702,8 +728,8 @@ uv build                                  # sdist + wheel with the bundled UI (n
 ```
 
 Set `LOQUENT_SKIP_UI_BUILD=1` to build or install without running npm, for Python-only work.
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow.
+See [CONTRIBUTING.md](https://github.com/Sanady/loquent/blob/main/CONTRIBUTING.md) for the full workflow.
 
 ## License
 
-Loquent is licensed under the [Apache License 2.0](LICENSE).
+Loquent is licensed under the [Apache License 2.0](https://github.com/Sanady/loquent/blob/main/LICENSE).
