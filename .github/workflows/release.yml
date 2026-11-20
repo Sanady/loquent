@@ -133,6 +133,7 @@ jobs:
           assert not any("/server/static/" in n for n in names), "sdist contains the built static files"
           print("dist contents ok:", sdists[0].name, wheels[0].name)
           sys.exit(0)
+      # Keep the twine version in step with ci.yml.
       - run: uvx twine==7.0.0 check --strict dist/*.whl dist/*.tar.gz
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-// Prove that the first release is tagged exactly v0.1.0 and its PR is titled "release 0.1.0".
+// Verify the bootstrap release (0.1.0, forced by "release-as") is tagged exactly v0.1.0 and its
+// PR is titled "release 0.1.0". This keeps passing after "release-as" is dropped; from then on it
+// still guards "include-component-in-tag": false, i.e. that the tag carries no component.
 //
 // Builds the Manifest from the real release-please-config.json and .release-please-manifest.json
 // with the release-please that the pinned release-please-action bundles, serving files from
@@ -8,6 +10,7 @@
 // Asserts:
 //   - the release PR is for 0.1.0 and its title contains "release 0.1.0" but not "loquent"
 //   - the release tag is exactly v0.1.0
+//   - the tag has no "loquent-" prefix (holds with or without release-as)
 //
 // Without "include-component-in-tag": false, release-please 17 adds package-name to both,
 // giving tag loquent-v0.1.0 and title "release loquent 0.1.0". release.yml's build job would
@@ -88,6 +91,7 @@ await withReleasePlease(async ({ require, build, version, actionVersion }) => {
     files: [],
   });
   const tag = release?.tag?.toString();
+  if (tag?.startsWith("loquent-")) errors.push(`release tag "${tag}" carries the component prefix "loquent-"`);
   if (tag !== EXPECTED_TAG) errors.push(`release tag is ${tag}, want ${EXPECTED_TAG}`);
 
   if (errors.length) fail(errors.join("\n      "));
