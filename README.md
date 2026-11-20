@@ -28,9 +28,11 @@ http://127.0.0.1:8000.
 # app.py
 import loquent
 
+
 async def agent(messages):
     yield "You said: "
     yield messages[-1].content
+
 
 if __name__ == "__main__":
     loquent.serve(agent)
@@ -83,10 +85,12 @@ from my_project.agent import agent
 
 chat = App(agent, app_name="Support")
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with chat.lifespan():  # mounted apps don't get lifespan events; run it here
         yield
+
 
 api = FastAPI(lifespan=lifespan)
 api.mount("/chat", chat)
@@ -120,6 +124,7 @@ adapter retries it once without tools and logs a warning on the `loquent.adapter
 ```python
 from loquent import ui
 from loquent.ui import Confirm, Form, Select
+
 
 async def agent(messages, ctx):
     answer = ctx.answer
@@ -357,7 +362,7 @@ from loquent import AgentError, RunContext
 
 
 class ShoutAdapter:
-    supports_widgets = False      # no widget tools are offered to this backend
+    supports_widgets = False  # no widget tools are offered to this backend
     supports_attachments = False  # messages with files are refused
 
     async def run(self, input, ctx: RunContext):

@@ -133,8 +133,11 @@ async def test_thread_events_hides_superseded_output_keeps_input(store: Store):
     r2 = await store.create_run(t.id)
     await store.append_events(r2.id, [ev(1, True, "RUN_STARTED"), ev(2)])
     events = await store.thread_events(t.id)
-    assert events == [ev(1, True, "RUN_STARTED").event, ev(1, True, "RUN_STARTED").event,
-                      ev(2).event]
+    assert events == [
+        ev(1, True, "RUN_STARTED").event,
+        ev(1, True, "RUN_STARTED").event,
+        ev(2).event,
+    ]
     assert (await store.get_run(r1.id)).superseded is True
 
 
@@ -159,8 +162,14 @@ async def test_file_meta_roundtrip(store: Store):
     u = await store.create_user("u", "h")
     from datetime import datetime
 
-    meta = FileMeta(id="f1", owner_id=u.id, name="a.txt", content_type="text/plain",
-                    size=3, created_at=datetime.now(UTC))
+    meta = FileMeta(
+        id="f1",
+        owner_id=u.id,
+        name="a.txt",
+        content_type="text/plain",
+        size=3,
+        created_at=datetime.now(UTC),
+    )
     await store.save_file_meta(meta)
     assert await store.get_file_meta("f1") == meta
     assert await store.get_file_meta("nope") is None

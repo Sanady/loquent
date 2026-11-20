@@ -371,7 +371,8 @@ async def test_attachment_only_message_is_accepted_and_titled_by_file(tmp_path):
     async with make_client(agent, file_store=fs) as c:
         a = (await upload(c, PNG, "photo.png", "image/png")).json()
         r = await c.post(
-            "/api/runs", json={"input": {"type": "message", "content": "", "attachments": [a["id"]]}}
+            "/api/runs",
+            json={"input": {"type": "message", "content": "", "attachments": [a["id"]]}},
         )
         ev = sse_events(r)
         assert ev[-1]["type"] == "RUN_FINISHED"

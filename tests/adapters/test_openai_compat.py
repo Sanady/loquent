@@ -89,8 +89,9 @@ async def test_trailing_slash_in_base_url():
 
 
 async def test_content_deltas_become_text_events():
-    ev = await run(make(ok(delta(role="assistant", content=""), delta(content="Hel"),
-                           delta(content="lo"))))
+    ev = await run(
+        make(ok(delta(role="assistant", content=""), delta(content="Hel"), delta(content="lo")))
+    )
     assert types(ev) == [
         "TEXT_MESSAGE_START",
         "TEXT_MESSAGE_CONTENT",
@@ -106,8 +107,16 @@ async def test_tool_call_deltas_become_tool_call_events():
         make(
             ok(
                 delta(content="Sure"),
-                delta(tool_calls=[{"index": 0, "id": "call_1", "type": "function",
-                                   "function": {"name": "loquent_confirm", "arguments": ""}}]),
+                delta(
+                    tool_calls=[
+                        {
+                            "index": 0,
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {"name": "loquent_confirm", "arguments": ""},
+                        }
+                    ]
+                ),
                 delta(tool_calls=[{"index": 0, "function": {"arguments": '{"title":'}}]),
                 delta(tool_calls=[{"index": 0, "function": {"arguments": ' "Ok?"}'}}]),
             )
@@ -132,8 +141,12 @@ async def test_multiple_tool_calls_by_index():
     ev = await run(
         make(
             ok(
-                delta(tool_calls=[{"index": 0, "id": "a", "function": {"name": "f", "arguments": "{}"}},
-                                  {"index": 1, "id": "b", "function": {"name": "g", "arguments": "{}"}}]),
+                delta(
+                    tool_calls=[
+                        {"index": 0, "id": "a", "function": {"name": "f", "arguments": "{}"}},
+                        {"index": 1, "id": "b", "function": {"name": "g", "arguments": "{}"}},
+                    ]
+                ),
             )
         )
     )
@@ -164,8 +177,12 @@ async def test_history_drops_tool_calls_without_results():
     seen = []
     msgs = [
         UserMessage(id="1", role="user", content="a"),
-        AssistantMessage(id="2", role="assistant", content="thinking",
-                         tool_calls=[_call("answered"), _call("orphan")]),
+        AssistantMessage(
+            id="2",
+            role="assistant",
+            content="thinking",
+            tool_calls=[_call("answered"), _call("orphan")],
+        ),
         ToolMessage(id="3", role="tool", content='"yes"', tool_call_id="answered"),
         ToolMessage(id="4", role="tool", content="stray", tool_call_id="nope"),
         AssistantMessage(id="5", role="assistant", content=None, tool_calls=[_call("lonely")]),
@@ -179,8 +196,11 @@ async def test_history_drops_tool_calls_without_results():
             "role": "assistant",
             "content": "thinking",
             "tool_calls": [
-                {"id": "answered", "type": "function",
-                 "function": {"name": "loquent_confirm", "arguments": "{}"}}
+                {
+                    "id": "answered",
+                    "type": "function",
+                    "function": {"name": "loquent_confirm", "arguments": "{}"},
+                }
             ],
         },
         {"role": "tool", "tool_call_id": "answered", "content": '"yes"'},
@@ -245,7 +265,9 @@ def test_capabilities():
 
 def raw(body: str, seen=None):
     def handler(request):
-        return httpx.Response(200, content=body.encode(), headers={"content-type": "text/event-stream"})
+        return httpx.Response(
+            200, content=body.encode(), headers={"content-type": "text/event-stream"}
+        )
 
     return handler
 
@@ -307,10 +329,12 @@ async def test_text_then_transport_error_closes_text_message():
         return httpx.Response(200, stream=Boom())
 
     adapter = make(handler)
-    inp = RunAgentInput(thread_id="t", run_id="r", state={}, messages=[], tools=[], context=[],
-                        forwarded_props={})
-    ctx = RunContext(thread_id="t", run_id="r",
-                     messages=[UserMessage(id="u", role="user", content="hi")])
+    inp = RunAgentInput(
+        thread_id="t", run_id="r", state={}, messages=[], tools=[], context=[], forwarded_props={}
+    )
+    ctx = RunContext(
+        thread_id="t", run_id="r", messages=[UserMessage(id="u", role="user", content="hi")]
+    )
     got = []
     with pytest.raises(AgentError) as ei:
         async for e in adapter.run(inp, ctx):

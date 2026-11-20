@@ -30,7 +30,9 @@ def test_mongo_fixture_fails_not_skips_under_ci(pytester, monkeypatch):
     monkeypatch.setenv("LOQUENT_TEST_MONGO_URL", "mongodb://127.0.0.1:1")
     _setup(pytester)
     res = pytester.runpytest("-k", "mongo")
-    res.assert_outcomes(errors=1, skipped=0, failed=0)  # pytest.fail in a fixture reports as an error
+    res.assert_outcomes(
+        errors=1, skipped=0, failed=0
+    )  # pytest.fail in a fixture reports as an error
 
 
 def test_mongo_fixture_skips_without_ci(pytester, monkeypatch):

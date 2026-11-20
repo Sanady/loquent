@@ -28,8 +28,12 @@ class FakeStore:
 
         from loquent.store.models import User
 
-        u = User(id=f"u{len(self.users)}", username=username, password_hash=password_hash,
-                 created_at=datetime.now(UTC))
+        u = User(
+            id=f"u{len(self.users)}",
+            username=username,
+            password_hash=password_hash,
+            created_at=datetime.now(UTC),
+        )
         self.users[u.id] = u
         return u
 

@@ -150,7 +150,9 @@ async def test_proxy_transport_failure_hides_details():
 
 
 async def test_proxy_does_not_close_injected_client():
-    body = sse(ev("RUN_STARTED", threadId="t", runId="r"), ev("RUN_FINISHED", threadId="t", runId="r"))
+    body = sse(
+        ev("RUN_STARTED", threadId="t", runId="r"), ev("RUN_FINISHED", threadId="t", runId="r")
+    )
     client = httpx.AsyncClient(transport=httpx.MockTransport(ok(body)))
     await run(AgUiHttpAdapter("https://agent.x.com/run", client=client))
     assert not client.is_closed
@@ -293,5 +295,7 @@ async def test_stream_without_any_events_is_invalid(raw):
 
 
 async def test_finished_run_with_no_content_is_a_valid_empty_reply():
-    body = sse(ev("RUN_STARTED", threadId="t", runId="r"), ev("RUN_FINISHED", threadId="t", runId="r"))
+    body = sse(
+        ev("RUN_STARTED", threadId="t", runId="r"), ev("RUN_FINISHED", threadId="t", runId="r")
+    )
     assert await run(make(ok(body))) == []
