@@ -103,8 +103,11 @@ def test_wheel_metadata_and_license(dists: Path) -> None:
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not HAS_NPM, reason="npm not on PATH: wheel built without the UI")
 def test_wheel_ships_static_ui(dists: Path) -> None:
+    if not HAS_NPM:
+        if os.environ.get("LOQUENT_REQUIRE_NPM"):
+            pytest.fail("LOQUENT_REQUIRE_NPM is set but npm is not on PATH")
+        pytest.skip("npm not on PATH: wheel built without the UI")
     wheel = next(dists.glob("*.whl"))
     with zipfile.ZipFile(wheel) as zf:
         assert "loquent/server/static/index.html" in zf.namelist()

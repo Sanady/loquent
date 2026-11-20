@@ -9,7 +9,18 @@ from pathlib import Path
 import pytest
 
 SCRIPT = Path(__file__).resolve().parent.parent / ".github" / "scripts" / "ci_ok.sh"
-JOBS = ["lint", "pr-title", "frontend", "test", "mongo", "e2e", "build", "wheel-smoke", "slow"]
+JOBS = [
+    "lint",
+    "pr-title",
+    "frontend",
+    "test",
+    "mongo",
+    "e2e",
+    "build",
+    "wheel-smoke",
+    "slow",
+    "release-config",
+]
 
 pytestmark = pytest.mark.skipif(
     sys.platform == "win32" or shutil.which("jq") is None or shutil.which("bash") is None,
@@ -52,6 +63,11 @@ def test_skipped_test_job_fails():
 
 def test_pr_title_skipped_on_push_passes():
     assert run(needs(**{"pr-title": "skipped"}), "push").returncode == 0
+
+
+@pytest.mark.parametrize("event", ["workflow_dispatch", "workflow_call"])
+def test_pr_title_skipped_outside_pull_requests_passes(event: str):
+    assert run(needs(**{"pr-title": "skipped"}), event).returncode == 0
 
 
 def test_pr_title_skipped_on_pull_request_fails():

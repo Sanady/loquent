@@ -5,10 +5,19 @@ on:
   push:
     branches: [main]
   workflow_call:
+    inputs:
+      # Steps read it as toJSON(inputs.cache) != 'false': outside workflow_call inputs.cache
+      # is null, and null == false in expressions, so a plain comparison would disable caching.
+      cache:
+        description: Restore and save uv and npm caches (release builds pass false)
+        type: boolean
+        default: true
   workflow_dispatch:
 
+# Under workflow_call the github context is the caller's, so key non-PR runs on run_id:
+# a release's CI call must not share (and be cancelled from) the push-to-main group.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -26,7 +35,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
-          enable-cache: true
+          enable-cache: ${{ toJSON(inputs.cache) != 'false' }}
           cache-dependency-glob: uv.lock
       - run: uv sync --locked
       - run: uv run ruff check --output-format=github .
@@ -67,7 +76,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: frontend/.nvmrc
-          cache: npm
+          cache: ${{ toJSON(inputs.cache) != 'false' && 'npm' || '' }}
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run typecheck
@@ -96,7 +105,7 @@ jobs:
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           python-version: ${{ matrix.python }}
-          enable-cache: true
+          enable-cache: ${{ toJSON(inputs.cache) != 'false' }}
           cache-dependency-glob: uv.lock
       - run: uv sync --locked
       - run: uv run pytest -q -rs -m "not mongo and not slow"
@@ -133,10 +142,12 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
-          enable-cache: true
+          enable-cache: ${{ toJSON(inputs.cache) != 'false' }}
           cache-dependency-glob: uv.lock
       - run: uv sync --locked --extra mongo
-      - run: uv pip install "${{ matrix.pymongo }}"
+      - run: uv pip install "$PYMONGO_SPEC"
+        env:
+          PYMONGO_SPEC: ${{ matrix.pymongo }}
       - run: uv run --no-sync pytest -q -rs -m mongo tests/store
 
   e2e:
@@ -150,12 +161,12 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
-          enable-cache: true
+          enable-cache: ${{ toJSON(inputs.cache) != 'false' }}
           cache-dependency-glob: uv.lock
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: frontend/.nvmrc
-          cache: npm
+          cache: ${{ toJSON(inputs.cache) != 'false' && 'npm' || '' }}
           cache-dependency-path: frontend/package-lock.json
       - run: uv sync --locked
       - run: npm ci
@@ -181,12 +192,12 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
-          enable-cache: true
+          enable-cache: ${{ toJSON(inputs.cache) != 'false' }}
           cache-dependency-glob: uv.lock
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: frontend/.nvmrc
-          cache: npm
+          cache: ${{ toJSON(inputs.cache) != 'false' && 'npm' || '' }}
           cache-dependency-path: frontend/package-lock.json
       - run: uv build
       - name: Assert dist contents
@@ -293,21 +304,23 @@ jobs:
   slow:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      LOQUENT_REQUIRE_NPM: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
-          enable-cache: true
+          enable-cache: ${{ toJSON(inputs.cache) != 'false' }}
           cache-dependency-glob: uv.lock
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: frontend/.nvmrc
-          cache: npm
+          cache: ${{ toJSON(inputs.cache) != 'false' && 'npm' || '' }}
           cache-dependency-path: frontend/package-lock.json
       - run: uv sync --locked
-      - run: uv run pytest -q -m slow
+      - run: uv run pytest -q -rs -m slow
 
   release-config:
     runs-on: ubuntu-latest
