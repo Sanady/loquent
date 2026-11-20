@@ -1,7 +1,8 @@
 """Contract suite: written against the Store protocol only."""
 
 import asyncio
-from datetime import UTC
+import sys
+from datetime import UTC, datetime
 
 import pytest
 
@@ -62,9 +63,25 @@ async def test_create_run_rejects_second_running_run(store: Store):
 async def test_create_run_allowed_when_previous_is_stale(store: Store):
     t = await _thread(store)
     first = await store.create_run(t.id)
-    second = await store.create_run(t.id, stale_after_s=0)
+    # -1 puts the cutoff strictly in the future, so staleness does not depend on clock resolution.
+    second = await store.create_run(t.id, stale_after_s=-1)
     assert second.id != first.id
     assert [r.id for r in await store.list_runs(t.id)] == [first.id, second.id]
+
+
+async def test_stale_run_is_deterministic_under_a_frozen_clock(store: Store, monkeypatch):
+    # A coarse clock (Windows ~15.6 ms) makes "now" equal the heartbeat; freeze it to model that.
+    frozen = datetime(2026, 1, 1, tzinfo=UTC)
+    monkeypatch.setattr(sys.modules[type(store).__module__], "_now", lambda: frozen)
+    t = await _thread(store)
+    await store.create_run(t.id)
+    with pytest.raises(RunInProgress):
+        await store.create_run(t.id)
+    if type(store).__module__.endswith("sqlite"):
+        # sqlite treats heartbeat == cutoff as live (>=), which is why stale_after_s=0 flaked.
+        with pytest.raises(RunInProgress):
+            await store.create_run(t.id, stale_after_s=0)
+    assert (await store.create_run(t.id, stale_after_s=-1)).status == "running"
 
 
 async def test_concurrent_create_run_exactly_one_wins(store: Store):
