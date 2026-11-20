@@ -1,0 +1,229 @@
+import getpass
+import sys
+import textwrap
+
+import pytest
+
+from loquent import cli
+from loquent.store.sqlite import SqliteStore
+
+AGENT = textwrap.dedent(
+    """
+    def agent(messages):
+        return "hi"
+    """
+)
+
+
+@pytest.fixture
+def captured(monkeypatch):
+    calls = {}
+
+    def fake_prepare(agent, **kw):
+        calls["agent"] = agent
+        calls["kw"] = kw
+        return object(), object()
+
+    monkeypatch.setattr(cli, "prepare", fake_prepare)
+    monkeypatch.setattr(cli, "run", lambda app, settings: None)
+    return calls
+
+
+def test_cli_loads_file_target(tmp_path, captured):
+    f = tmp_path / "myagent.py"
+    f.write_text(AGENT)
+    assert cli.main(["serve", f"{f}:agent", "--port", "9000"]) == 0
+    assert captured["agent"]([]) == "hi"
+    assert captured["kw"]["port"] == 9000
+
+
+def test_cli_loads_module_target(tmp_path, captured, monkeypatch):
+    (tmp_path / "climod.py").write_text(AGENT)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    sys.modules.pop("climod", None)
+    assert cli.main(["serve", "climod:agent"]) == 0
+    assert captured["agent"]([]) == "hi"
+
+
+def test_cli_url_target_and_options(captured, monkeypatch):
+    monkeypatch.setenv("MY_KEY", "sk-secret")
+    rc = cli.main(
+        [
+            "serve",
+            "http://x/v1",
+            "--model",
+            "m",
+            "--api-key-env",
+            "MY_KEY",
+            "--auth",
+            "none",
+            "--forwarded-allow-ips",
+            "1.2.3.4,5.6.7.8",
+            "--root-path",
+            "/c",
+            "--store",
+            "sqlite:///a.db",
+        ]
+    )
+    assert rc == 0
+    assert captured["agent"] == "http://x/v1"
+    kw = captured["kw"]
+    assert kw["api_key"] == "sk-secret" and kw["model"] == "m"
+    assert kw["forwarded_allow_ips"] == ["1.2.3.4", "5.6.7.8"]
+    assert kw["root_path"] == "/c" and kw["store_url"] == "sqlite:///a.db"
+    assert "host" not in kw  # unset flags do not override env/defaults
+
+
+def test_cli_missing_api_key_env(captured, monkeypatch, capsys):
+    monkeypatch.delenv("NOPE_KEY", raising=False)
+    assert cli.main(["serve", "http://x", "--api-key-env", "NOPE_KEY"]) == 2
+    assert "NOPE_KEY" in capsys.readouterr().err
+
+
+def test_cli_bad_target(captured, capsys):
+    assert cli.main(["serve", "nonexistent_mod_xyz:agent"]) == 2
+    assert cli.main(["serve", "/no/such/file.py:agent"]) == 2
+
+
+def test_cli_refuses_public_bind_without_auth(tmp_path, monkeypatch, capsys):
+    import uvicorn
+
+    monkeypatch.setattr(uvicorn, "run", lambda *a, **k: pytest.fail("must not start"))
+    f = tmp_path / "a.py"
+    f.write_text(AGENT)
+    rc = cli.main(["serve", f"{f}:agent", "--host", "0.0.0.0"])
+    assert rc == 2
+    assert "--insecure-no-auth" in capsys.readouterr().err
+
+
+def test_cli_public_bind_allowed_with_flag(tmp_path, monkeypatch):
+    import uvicorn
+
+    ran = {}
+    monkeypatch.setattr(uvicorn, "run", lambda app, **k: ran.update(k))
+    f = tmp_path / "a.py"
+    f.write_text(AGENT)
+    rc = cli.main(
+        [
+            "serve",
+            f"{f}:agent",
+            "--host",
+            "0.0.0.0",
+            "--insecure-no-auth",
+            "--store",
+            f"sqlite:///{tmp_path}/x.db",
+        ]
+    )
+    assert rc == 0 and ran["host"] == "0.0.0.0"
+
+
+async def _users(url):
+    store = SqliteStore(url)
+    await store.init()
+    try:
+        return await store.get_user_by_username("alice")
+    finally:
+        await store.close()
+
+
+def test_cli_user_add_creates_user(tmp_path, monkeypatch):
+    import asyncio
+
+    db = tmp_path / "u.db"
+    monkeypatch.setattr(getpass, "getpass", lambda prompt="": "s3cret-pass")
+    assert cli.main(["user", "add", "alice", "--store", f"sqlite:///{db}"]) == 0
+    u = asyncio.run(_users(str(db)))
+    assert u is not None and u.password_hash != "s3cret-pass"
+    assert cli.main(["user", "add", "alice", "--store", f"sqlite:///{db}"]) == 2  # duplicate
+
+
+def test_cli_user_add_mismatch_or_empty(tmp_path, monkeypatch):
+    answers = iter(["a", "b"])
+    monkeypatch.setattr(getpass, "getpass", lambda prompt="": next(answers))
+    assert cli.main(["user", "add", "bob", "--store", f"sqlite:///{tmp_path}/m.db"]) == 2
+    monkeypatch.setattr(getpass, "getpass", lambda prompt="": "")
+    assert cli.main(["user", "add", "bob", "--store", f"sqlite:///{tmp_path}/m.db"]) == 2
+
+
+def test_cli_user_add_uses_env_store(tmp_path, monkeypatch):
+    import asyncio
+
+    db = tmp_path / "e.db"
+    monkeypatch.setenv("LOQUENT_STORE_URL", f"sqlite:///{db}")
+    monkeypatch.setattr(getpass, "getpass", lambda prompt="": "pw-pw-pw-1")
+    assert cli.main(["user", "add", "alice"]) == 0
+    assert asyncio.run(_users(str(db))) is not None
+
+
+def test_cli_missing_attr_clean_error(tmp_path, capsys):
+    f = tmp_path / "a.py"
+    f.write_text(AGENT)
+    assert cli.main(["serve", f"{f}:nope"]) == 2
+    err = capsys.readouterr().err
+    assert "no attribute 'nope'" in err and "Traceback" not in err
+
+
+def test_cli_non_callable_target(tmp_path, capsys):
+    f = tmp_path / "a.py"
+    f.write_text("CONSTANT = 5\n")
+    assert cli.main(["serve", f"{f}:CONSTANT"]) == 2
+    err = capsys.readouterr().err
+    assert "not callable" in err and "Traceback" not in err
+
+
+def test_cli_invalid_setting(tmp_path, capsys):
+    f = tmp_path / "a.py"
+    f.write_text(AGENT)
+    assert cli.main(["serve", f"{f}:agent", "--port", "abc"]) == 2
+    err = capsys.readouterr().err
+    assert "invalid int value" in err and "Traceback" not in err
+    assert cli.main(["serve", f"{f}:agent", "--auth", "password"]) == 2  # no secret key
+    err = capsys.readouterr().err
+    assert "requires LOQUENT_SECRET_KEY" in err and "Traceback" not in err
+
+
+def test_cli_runtime_error_in_uvicorn_propagates(tmp_path, monkeypatch):
+    import uvicorn
+
+    def boom(*a, **k):
+        raise TypeError("runtime failure")
+
+    monkeypatch.setattr(uvicorn, "run", boom)
+    f = tmp_path / "a.py"
+    f.write_text(AGENT)
+    with pytest.raises(TypeError, match="runtime failure"):
+        cli.main(["serve", f"{f}:agent", "--store", f"sqlite:///{tmp_path}/r.db"])
+
+
+def test_cli_file_target_does_not_clobber_sys_modules(tmp_path, captured):
+    f = tmp_path / "json.py"
+    f.write_text(AGENT)
+    import json as real_json
+
+    assert cli.main(["serve", f"{f}:agent"]) == 0
+    assert sys.modules["json"] is real_json
+
+
+def test_cli_invalid_env_setting(tmp_path, monkeypatch, capsys):
+    f = tmp_path / "a.py"
+    f.write_text(AGENT)
+    monkeypatch.setenv("LOQUENT_PORT", "notanint")
+    assert cli.main(["serve", f"{f}:agent"]) == 2
+    assert "invalid settings" in capsys.readouterr().err
+
+
+def test_cli_file_target_dataclass_forward_refs(tmp_path, captured):
+    f = tmp_path / "dc.py"
+    f.write_text(
+        "from __future__ import annotations\nfrom dataclasses import dataclass\n"
+        "@dataclass\nclass C:\n    x: int = 1\n"
+        "def agent(messages):\n    return C().x\n"
+    )
+    assert cli.main(["serve", f"{f}:agent"]) == 0
+
+
+def test_cli_no_widgets_flag(captured):
+    assert cli.main(["serve", "http://x/agent", "--no-widgets"]) == 0
+    assert captured["kw"]["widgets"] is False
+    assert cli.main(["serve", "http://x/agent"]) == 0
+    assert "widgets" not in captured["kw"]  # unset: env/default decides

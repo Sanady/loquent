@@ -1,0 +1,61 @@
+[project]
+name = "loquent"
+version = "0.1.0"
+description = "Serve a chat UI over AG-UI, the open agent-to-UI protocol."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "ag-ui-protocol>=1.0,<2",
+    "starlette>=1.10",
+    "uvicorn>=0.54",
+    "pydantic>=2",
+    "aiosqlite",
+    "httpx>=0.28",
+    "pydantic-settings>=2.16",
+    "argon2-cffi>=25.1.0",
+    "itsdangerous>=2.2.0",
+    "python-multipart>=0.0.34",
+]
+
+[project.scripts]
+loquent = "loquent.cli:main"
+
+[project.optional-dependencies]
+mongo = [
+    "pymongo>=4.9",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+    "fastapi",
+    "pymongo-inmemory>=0.5.0",
+    "pymongo>=4.9,<4.10",  # pymongo-inmemory ships mongod <=4.0; newer pymongo needs >=4.4
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/loquent"]
+# The UI build output is gitignored; ship it anyway (written by hatch_build.py).
+artifacts = ["src/loquent/server/static/**"]
+
+[tool.hatch.build.targets.sdist]
+# frontend/ sources are included so a wheel can be rebuilt from the sdist.
+include = ["/src", "/frontend", "/tests", "/hatch_build.py", "/README.md"]
+exclude = ["node_modules", "test-results", "playwright-report", "__pycache__"]
+
+[tool.hatch.build.hooks.custom]
+# hatch_build.py: npm ci && npm run build in frontend/ (skip with LOQUENT_SKIP_UI_BUILD=1).
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
