@@ -201,6 +201,20 @@ Because pushing is outward-facing, the implementer stops and asks before step 3.
 6. Under Actions settings, set the token default to read-only, allow GitHub Actions to create PRs (release-please needs this), and require approval for first-time contributors.
 7. Under Code security, enable CodeQL default setup, Dependabot alerts and security updates, secret scanning with push protection, and private vulnerability reporting.
 
+## Owner answers after the builder check
+
+- Commits are published as they are, with author `rener <ivanrenerr@gmail.com>`. The author identity is not rewritten.
+- The `docs/superpowers/` design docs and plans are published along with the code.
+
+## Calls settled after the builder check
+
+- **First push.** The first push goes straight to `main`, once, because the repo is empty and has no CI to satisfy. The format-only commit, and its `.git-blame-ignore-revs` entry, land before the push. Rulesets (required `ci-ok`, squash-only) are applied only after the first CI run on GitHub is green, so the merge-commit history from `feat/release-1` is unaffected.
+- **First release version.** `release-as: 0.1.0` is used for the first release only. Removing it afterwards is a one-line manual step on the owner checklist: a PR titled `chore: drop release-as` that goes through normal CI. It is not automated.
+- **`uv.lock` fallback.** If the `uv.lock` fallback is needed, it commits with the same GitHub App token, so CI runs on the release PR.
+- **Test-only code changes.** Changing `tests/store/conftest.py` to fail rather than skip under CI, and adding the markers or selectors CI needs, are allowed code changes alongside the three pre-push fixes.
+- **Python 3.14.** It goes into the matrix only if `uv sync --locked --python 3.14` succeeds locally. Otherwise it is left out, and the handoff says so. It is never added as an allowed-to-fail leg.
+- **Node version.** `frontend/.nvmrc` = `26`. Node 26 is the Active LTS since October 2026.
+
 ## Calls I made (owner can override)
 
 - Python 3.14 is added to the matrix. Windows and macOS run on 3.12 only.
