@@ -15,9 +15,6 @@ updates:
         update-types:
           - minor
           - patch
-    ignore:
-      # The dev pin (<4.10) is tied to pymongo-inmemory; CI tests the real range itself.
-      - dependency-name: pymongo
 
   - package-ecosystem: npm
     directory: /frontend

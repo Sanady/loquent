@@ -16,37 +16,19 @@ def _unusable(reason: str) -> None:
 @pytest.fixture(scope="session")
 def mongo_url():
     url = os.environ.get("LOQUENT_TEST_MONGO_URL")
-    if url:
-        from pymongo import MongoClient
+    if not url:
+        _unusable("set LOQUENT_TEST_MONGO_URL, e.g. docker run -p 27017:27017 mongo:8.0")
+    from pymongo import MongoClient
 
-        ms = int(float(os.environ.get("LOQUENT_TEST_MONGO_TIMEOUT_S", "10")) * 1000)
-        client = MongoClient(url, serverSelectionTimeoutMS=ms, connectTimeoutMS=ms)
-        try:
-            client.admin.command("ping")
-        except Exception as e:  # noqa: BLE001
-            _unusable(f"LOQUENT_TEST_MONGO_URL is set but MongoDB is unreachable: {e}")
-        finally:
-            client.close()
-        yield url
-        return
-    mongod = None
+    ms = int(float(os.environ.get("LOQUENT_TEST_MONGO_TIMEOUT_S", "10")) * 1000)
+    client = MongoClient(url, serverSelectionTimeoutMS=ms, connectTimeoutMS=ms)
     try:
-        from pymongo_inmemory.context import Context
-        from pymongo_inmemory.mongod import Mongod
-
-        mongod = Mongod(Context())
-        mongod.start()
+        client.admin.command("ping")
     except Exception as e:  # noqa: BLE001
-        if mongod is not None:
-            mongod.stop()
-        _unusable(
-            "no usable MongoDB (set LOQUENT_TEST_MONGO_URL, or allow the pymongo-inmemory "
-            f"mongod download; note it ships mongod <=4.0): {e}"
-        )
-    try:
-        yield mongod.connection_string
+        _unusable(f"LOQUENT_TEST_MONGO_URL is set but MongoDB is unreachable: {e}")
     finally:
-        mongod.stop()
+        client.close()
+    return url
 
 
 @pytest.fixture(params=["sqlite", pytest.param("mongo", marks=pytest.mark.mongo)])
