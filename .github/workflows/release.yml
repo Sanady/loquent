@@ -42,8 +42,11 @@ jobs:
         with:
           client-id: ${{ secrets.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-          permission-contents: write
-          permission-pull-requests: write
+          permission-contents: write # release commits, tags and GitHub releases
+          permission-pull-requests: write # open and update the release PR
+          # Labels: release-please finds the merged release PR by `autorelease: pending`, so a
+          # failed label write would silently stop the release from being tagged.
+          permission-issues: write
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
         with:
@@ -80,6 +83,7 @@ jobs:
       - name: Check versions match the tag
         shell: python
         env:
+          RELEASE_CREATED: ${{ needs.release-please.outputs.release_created }}
           TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
         run: |
           import os
@@ -93,8 +97,11 @@ jobs:
           assert locked == [version], f"uv.lock has loquent {locked}, pyproject has {version}"
 
           tag = os.environ["TAG_NAME"]
-          if tag:
-              assert tag == f"v{version}", f"tag {tag} does not match pyproject version v{version}"
+          if os.environ["RELEASE_CREATED"] == "true":
+              assert tag == f"v{version}", f"tag {tag!r} does not match pyproject version v{version}"
+          else:
+              # Only the workflow_dispatch TestPyPI rehearsal builds without a release.
+              assert os.environ["GITHUB_EVENT_NAME"] == "workflow_dispatch", "no release and no dispatch"
           print(f"version {version} ok (tag: {tag or 'none, TestPyPI rehearsal'})")
           sys.exit(0)
       - run: uv build
@@ -126,7 +133,7 @@ jobs:
           assert not any("/server/static/" in n for n in names), "sdist contains the built static files"
           print("dist contents ok:", sdists[0].name, wheels[0].name)
           sys.exit(0)
-      - run: uvx twine check --strict dist/*.whl dist/*.tar.gz
+      - run: uvx twine==7.0.0 check --strict dist/*.whl dist/*.tar.gz
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist

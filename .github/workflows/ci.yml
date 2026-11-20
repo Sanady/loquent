@@ -77,6 +77,7 @@ jobs:
         with:
           node-version-file: frontend/.nvmrc
           cache: ${{ toJSON(inputs.cache) != 'false' && 'npm' || '' }}
+          package-manager-cache: ${{ toJSON(inputs.cache) != 'false' }}
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run typecheck
@@ -167,6 +168,7 @@ jobs:
         with:
           node-version-file: frontend/.nvmrc
           cache: ${{ toJSON(inputs.cache) != 'false' && 'npm' || '' }}
+          package-manager-cache: ${{ toJSON(inputs.cache) != 'false' }}
           cache-dependency-path: frontend/package-lock.json
       - run: uv sync --locked
       - run: npm ci
@@ -198,6 +200,7 @@ jobs:
         with:
           node-version-file: frontend/.nvmrc
           cache: ${{ toJSON(inputs.cache) != 'false' && 'npm' || '' }}
+          package-manager-cache: ${{ toJSON(inputs.cache) != 'false' }}
           cache-dependency-path: frontend/package-lock.json
       - run: uv build
       - name: Assert dist contents
@@ -318,6 +321,7 @@ jobs:
         with:
           node-version-file: frontend/.nvmrc
           cache: ${{ toJSON(inputs.cache) != 'false' && 'npm' || '' }}
+          package-manager-cache: ${{ toJSON(inputs.cache) != 'false' }}
           cache-dependency-path: frontend/package-lock.json
       - run: uv sync --locked
       - run: uv run pytest -q -rs -m slow
@@ -334,6 +338,7 @@ jobs:
           node-version-file: frontend/.nvmrc
           package-manager-cache: false
       - run: node scripts/check_release_lockfile.mjs
+      - run: node scripts/check_release_tag.mjs
 
   ci-ok:
     if: always()

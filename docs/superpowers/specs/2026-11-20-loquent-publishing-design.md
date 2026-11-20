@@ -172,6 +172,7 @@ Jobs (all parallel unless noted):
   - `pymongo` is ignored while the dev pin exists.
   - Every update gets the label `dependencies`.
   - Commit messages use the prefixes `chore(deps)` and `build(deps)`, so they are conventional.
+  - Known limitation: release-please's changelog has a Dependencies section for the `deps` type, but Dependabot commits are typed `chore` and `build`, which the changelog hides. Dependency bumps therefore do not appear in release notes. Changing Dependabot's prefix to `deps` would fail the pr-title check, which does not allow `deps`. Accepted for now.
 - **CodeQL** uses default setup (Python, JS/TS, Actions), enabled in Settings, with no workflow file. Secret scanning, push protection, Dependabot alerts and private vulnerability reporting are also enabled in Settings.
 - **Optional `actions-lint` job**: actionlint and zizmor on `.github/workflows/`. The builder adds it if it is cheap.
 
@@ -188,7 +189,7 @@ Because pushing is outward-facing, the implementer stops and asks before step 3.
 ### 8. One-time owner setup (checklist in the handoff)
 
 1. Run `gh auth login`.
-2. Create a GitHub App, e.g. "loquent-release", with Contents and Pull requests set to read & write. Install it on the repo, and store `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY` as repository secrets. Alternative: a fine-grained PAT stored as `RELEASE_PLEASE_TOKEN`.
+2. Create a GitHub App, e.g. "loquent-release", with Contents, Pull requests and Issues set to read & write. Issues is needed because release-please labels its PR `autorelease: pending` and finds the merged release PR by that label, so a failed label write would silently block the release (ruling P11). Install it on the repo, and store `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY` as repository secrets. Alternative: a fine-grained PAT stored as `RELEASE_PLEASE_TOKEN`.
 3. Configure environments. `pypi` has a required reviewer (the owner) and deployments from main only. `testpypi` has no reviewer.
 4. On PyPI and on TestPyPI, add a pending Trusted Publisher: owner `Sanady`, repo `loquent`, workflow `release.yml`, environment `pypi` (or `testpypi`). The account needs 2FA.
 5. Create a ruleset on main:

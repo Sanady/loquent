@@ -105,7 +105,7 @@ def test_wheel_metadata_and_license(dists: Path) -> None:
 @pytest.mark.slow
 def test_wheel_ships_static_ui(dists: Path) -> None:
     if not HAS_NPM:
-        if os.environ.get("LOQUENT_REQUIRE_NPM"):
+        if os.environ.get("LOQUENT_REQUIRE_NPM", "").lower() in ("1", "true"):
             pytest.fail("LOQUENT_REQUIRE_NPM is set but npm is not on PATH")
         pytest.skip("npm not on PATH: wheel built without the UI")
     wheel = next(dists.glob("*.whl"))
