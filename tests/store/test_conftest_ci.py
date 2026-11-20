@@ -14,6 +14,7 @@ async def test_uses_store(store):
 INI = """
 [pytest]
 asyncio_mode = auto
+asyncio_default_fixture_loop_scope = function
 markers =
     mongo: needs a real MongoDB
 """

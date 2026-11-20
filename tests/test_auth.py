@@ -193,6 +193,7 @@ def test_other_names_still_refused(host):
     assert is_loopback(host) is False
 
 
+@pytest.mark.filterwarnings("ignore:Using `httpx` with `starlette.testclient`")
 async def test_starlette_testclient_gets_through_auth_none():
     from starlette.testclient import TestClient
 
