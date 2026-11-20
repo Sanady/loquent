@@ -103,8 +103,9 @@ ideas:
 
 ### Entry points (all equivalent)
 ```python
-loquent.serve(agent)                         # Python
-app = loquent.App(agent); fastapi_app.mount("/chat", app)   # mount into existing ASGI app
+loquent.serve(agent)  # Python
+app = loquent.App(agent)
+fastapi_app.mount("/chat", app)  # mount into existing ASGI app
 ```
 ```
 loquent serve my_agent.py:graph              # CLI, module:object

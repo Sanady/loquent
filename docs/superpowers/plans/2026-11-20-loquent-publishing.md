@@ -109,25 +109,44 @@ Code touched by Task 1: `src/loquent/auth.py`, `src/loquent/ui.py`, `frontend/sr
 ```python
 # tests/test_auth.py
 @pytest.mark.parametrize("host", ["testclient"])
-def test_testclient_counts_as_loopback(host): assert is_loopback(host) is True
+def test_testclient_counts_as_loopback(host):
+    assert is_loopback(host) is True
+
+
 @pytest.mark.parametrize("host", ["TESTCLIENT", "testclient.evil", "localhost", ""])
-def test_other_names_still_refused(host): assert is_loopback(host) is False
+def test_other_names_still_refused(host):
+    assert is_loopback(host) is False
+
+
 def test_starlette_testclient_gets_through_auth_none():  # build create_app via tests/server/srv.py helpers
     with TestClient(app) as c:  # starlette.testclient
         assert c.get("api/threads", headers={"X-Loquent-CSRF": "1"}).status_code == 200
 
+
 # tests/test_ui.py
 def test_select_accepts_list_pairs():
     assert Select("Pick", [["pro", "Pro plan"], "basic"]).args()["options"] == [
-        {"value": "pro", "label": "Pro plan"}, {"value": "basic", "label": "basic"}]
+        {"value": "pro", "label": "Pro plan"},
+        {"value": "basic", "label": "basic"},
+    ]
+
+
 def test_validate_answer_accepts_value_from_list_pair():
-    validate_answer("loquent_select", {"message": "m", "options": [["pro", "Pro"]]}, {"value": "pro"})  # no raise
+    validate_answer(
+        "loquent_select", {"message": "m", "options": [["pro", "Pro"]]}, {"value": "pro"}
+    )  # no raise
+
 
 # tests/store/test_conftest_ci.py — uses pytester
 def test_mongo_fixture_fails_not_skips_under_ci(pytester, monkeypatch):
-    monkeypatch.setenv("CI", "true"); monkeypatch.setenv("LOQUENT_TEST_MONGO_URL", "mongodb://127.0.0.1:1")
+    monkeypatch.setenv("CI", "true")
+    monkeypatch.setenv("LOQUENT_TEST_MONGO_URL", "mongodb://127.0.0.1:1")
     # run a copy of the store conftest + one mongo-param test; assert outcomes: failed=1, skipped=0
-def test_not_mongo_marker_deselects_all_mongo_params(pytester): ...  # collect-only: no id contains "mongo"
+
+
+def test_not_mongo_marker_deselects_all_mongo_params(
+    pytester,
+): ...  # collect-only: no id contains "mongo"
 ```
 
 ```ts
@@ -183,8 +202,14 @@ def test_wheel_metadata_and_license(tmp_path):
     assert "Classifier: Programming Language :: Python :: 3.14" in meta
     assert "Project-URL: Source, https://github.com/Sanady/loquent" in meta
     assert any(n.endswith("licenses/LICENSE") for n in names)
-def test_sdist_contains_license_and_changelog(tmp_path): ...  # LICENSE, CHANGELOG.md in sdist; no node_modules
-def test_twine_check_strict(tmp_path): ...  # subprocess `uvx twine check --strict` on built dists, returncode 0
+
+
+def test_sdist_contains_license_and_changelog(
+    tmp_path,
+): ...  # LICENSE, CHANGELOG.md in sdist; no node_modules
+def test_twine_check_strict(
+    tmp_path,
+): ...  # subprocess `uvx twine check --strict` on built dists, returncode 0
 ```
 
 - [ ] **Step 2:** Run `uv run pytest tests/test_packaging.py -q`. Expect FAIL.

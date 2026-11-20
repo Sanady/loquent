@@ -1,6 +1,10 @@
 import uuid
 
+import pytest
+
 from loquent.store.mongo import MongoStore
+
+pytestmark = pytest.mark.mongo
 
 
 async def test_mongo_init_indexes_threads_active_run_id(mongo_url):

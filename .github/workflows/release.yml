@@ -1,0 +1,201 @@
+name: Release
+
+# Push to main: release-please opens or updates the release PR. Merging that PR creates the
+# GitHub release and tag, and then dist is built from the tagged sha and published to PyPI
+# behind the `pypi` environment (required reviewer) with Trusted Publishing.
+# workflow_dispatch with testpypi=true: one rehearsal that builds main and publishes it to
+# TestPyPI. No release is created.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      testpypi:
+        description: Build main and publish it to TestPyPI (rehearsal, no release)
+        type: boolean
+        default: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Everything goes through the App token below, so GITHUB_TOKEN needs nothing here.
+    permissions: {}
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      # An App installation token (not GITHUB_TOKEN) so the release PR triggers CI and can
+      # satisfy the required ci-ok check. client-id accepts the numeric App ID too.
+      - uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        id: app-token
+        with:
+          client-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write # release commits, tags and GitHub releases
+          permission-pull-requests: write # open and update the release PR
+          # Labels: release-please finds the merged release PR by `autorelease: pending`, so a
+          # failed label write would silently stop the release from being tagged.
+          permission-issues: write
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  build:
+    needs: release-please
+    # release-please is skipped on workflow_dispatch, so opt out of the implicit success().
+    if: >-
+      !cancelled() && (
+        (needs.release-please.result == 'success'
+          && needs.release-please.outputs.release_created == 'true')
+        || (github.event_name == 'workflow_dispatch'
+          && github.ref == 'refs/heads/main'
+          && inputs.testpypi)
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release-please.outputs.sha || github.sha }}
+          persist-credentials: false
+      # No caches in the release build: nothing restored from a cache can reach PyPI.
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
+          package-manager-cache: false
+      - name: Check versions match the tag
+        shell: python
+        env:
+          RELEASE_CREATED: ${{ needs.release-please.outputs.release_created }}
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          import os
+          import sys
+          import tomllib
+
+          with open("pyproject.toml", "rb") as f:
+              version = tomllib.load(f)["project"]["version"]
+          with open("uv.lock", "rb") as f:
+              locked = [p["version"] for p in tomllib.load(f)["package"] if p["name"] == "loquent"]
+          assert locked == [version], f"uv.lock has loquent {locked}, pyproject has {version}"
+
+          tag = os.environ["TAG_NAME"]
+          if os.environ["RELEASE_CREATED"] == "true":
+              assert tag == f"v{version}", f"tag {tag!r} does not match pyproject version v{version}"
+          else:
+              # Only the workflow_dispatch TestPyPI rehearsal builds without a release.
+              assert os.environ["GITHUB_EVENT_NAME"] == "workflow_dispatch", "no release and no dispatch"
+          print(f"version {version} ok (tag: {tag or 'none, TestPyPI rehearsal'})")
+          sys.exit(0)
+      - run: uv build
+      - name: Assert dist contents
+        shell: python
+        run: |
+          import sys
+          import tarfile
+          import zipfile
+          from pathlib import Path
+
+          dist = Path("dist")
+          sdists = sorted(dist.glob("*.tar.gz"))
+          wheels = sorted(dist.glob("*-py3-none-any.whl"))
+          assert len(sdists) == 1, f"expected 1 sdist, got {sdists}"
+          assert len(wheels) == 1, f"expected 1 py3-none-any wheel, got {wheels}"
+
+          with zipfile.ZipFile(wheels[0]) as wheel:
+              names = wheel.namelist()
+          assert "loquent/server/static/index.html" in names, "wheel is missing static/index.html"
+          assert any(n.startswith("loquent/server/static/assets/") and not n.endswith("/") for n in names), (
+              "wheel has no static/assets files"
+          )
+
+          with tarfile.open(sdists[0]) as sdist:
+              names = sdist.getnames()
+          assert any(n.endswith("frontend/package-lock.json") for n in names), "sdist is missing frontend/package-lock.json"
+          assert not any("/node_modules/" in n for n in names), "sdist contains node_modules"
+          assert not any("/server/static/" in n for n in names), "sdist contains the built static files"
+          print("dist contents ok:", sdists[0].name, wheels[0].name)
+          sys.exit(0)
+      - run: uvx twine==7.0.0 check --strict dist/*.whl dist/*.tar.gz
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish-pypi:
+    needs: [release-please, build]
+    if: >-
+      !cancelled()
+      && needs.build.result == 'success'
+      && needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/p/loquent
+    permissions:
+      id-token: write # Trusted Publishing (OIDC) to PyPI; no API token exists
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+
+  publish-testpypi:
+    needs: build
+    if: >-
+      !cancelled()
+      && needs.build.result == 'success'
+      && github.event_name == 'workflow_dispatch'
+      && inputs.testpypi
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/loquent
+    permissions:
+      id-token: write # Trusted Publishing (OIDC) to TestPyPI
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  attach-assets:
+    needs: [release-please, publish-pypi]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # upload dist/* to the release that release-please created
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+      - name: Upload dist to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"

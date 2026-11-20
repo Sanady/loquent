@@ -65,7 +65,12 @@ def test_unterminated_text_kept_unterminated_tool_call_dropped():
     ev = [
         {"type": "TEXT_MESSAGE_START", "messageId": "a1"},
         {"type": "TEXT_MESSAGE_CONTENT", "messageId": "a1", "delta": "partial"},
-        {"type": "TOOL_CALL_START", "toolCallId": "t1", "toolCallName": "f", "parentMessageId": "a1"},
+        {
+            "type": "TOOL_CALL_START",
+            "toolCallId": "t1",
+            "toolCallName": "f",
+            "parentMessageId": "a1",
+        },
         {"type": "TOOL_CALL_ARGS", "toolCallId": "t1", "delta": "{"},
     ]
     (a,) = events_to_messages(ev)

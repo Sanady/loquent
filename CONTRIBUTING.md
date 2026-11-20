@@ -1,0 +1,53 @@
+# Contributing to Loquent
+
+Thanks for helping. Loquent is Apache-2.0 licensed; by contributing you agree your work is
+released under the same license.
+
+## Development setup
+
+You need Python 3.11+, [uv](https://docs.astral.sh/uv/) and Node.js.
+
+```bash
+uv sync
+npm --prefix frontend ci
+```
+
+Set `LOQUENT_SKIP_UI_BUILD=1` to build or install without running npm, for Python-only work.
+
+## Running the test suites
+
+```bash
+uv run pytest -q -m "not slow"        # Python tests (Mongo contract tests need a server, see below)
+uv run pytest -q -m slow              # builds the wheel and sdist and checks the metadata
+npm --prefix frontend test -- --run   # frontend unit tests (vitest)
+npm --prefix frontend run e2e         # builds the UI, then runs Playwright
+```
+
+The MongoDB contract tests run against a real server when you point them at one:
+
+```bash
+docker run -p 27017:27017 mongo:8.0
+LOQUENT_TEST_MONGO_URL=mongodb://localhost:27017 uv run pytest -q -m mongo
+```
+
+Lint and format before you push; CI enforces both:
+
+```bash
+uv run ruff check
+uv run ruff format --check .
+```
+
+## Pull requests
+
+- Branch from `main` and open a PR against it.
+- The PR title must follow Conventional Commits, because merges are squashed and the title becomes
+  the commit message that release automation reads. Allowed types: `feat`, `fix`, `docs`,
+  `chore`, `refactor`, `perf`, `test`, `build`, `ci`. Example: `fix: reject empty thread ids`.
+- Only squash merges are enabled.
+- Add or update tests with your change, and run the suites above.
+
+## Ignoring formatting-only commits in `git blame`
+
+```bash
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```

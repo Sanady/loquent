@@ -1,0 +1,357 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+    inputs:
+      # Steps read it as toJSON(inputs.cache) != 'false': outside workflow_call inputs.cache
+      # is null, and null == false in expressions, so a plain comparison would disable caching.
+      cache:
+        description: Restore and save uv and npm caches (release builds pass false)
+        type: boolean
+        default: true
+  workflow_dispatch:
+
+# Under workflow_call the github context is the caller's, so key non-PR runs on run_id:
+# a release's CI call must not share (and be cancelled from) the push-to-main group.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      LOQUENT_SKIP_UI_BUILD: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: ${{ toJSON(inputs.cache) != 'false' }}
+          cache-dependency-glob: uv.lock
+      - run: uv sync --locked
+      - run: uv run ruff check --output-format=github .
+      - run: uv run ruff format --check .
+
+  pr-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@2252a14e810aa9b85c2d560bd7070c802206ecf6 # v6.1.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            chore
+            refactor
+            perf
+            test
+            build
+            ci
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: ${{ toJSON(inputs.cache) != 'false' && 'npm' || '' }}
+          package-manager-cache: ${{ toJSON(inputs.cache) != 'false' }}
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npx vitest --run
+
+  test:
+    name: test (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      LOQUENT_SKIP_UI_BUILD: "1"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, python: "3.11" }
+          - { os: ubuntu-latest, python: "3.12" }
+          - { os: ubuntu-latest, python: "3.13" }
+          - { os: ubuntu-latest, python: "3.14" }
+          - { os: windows-latest, python: "3.12" }
+          - { os: macos-latest, python: "3.12" }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: ${{ toJSON(inputs.cache) != 'false' }}
+          cache-dependency-glob: uv.lock
+      - run: uv sync --locked
+      - run: uv run pytest -q -rs -m "not mongo and not slow"
+
+  mongo:
+    name: mongo (mongo ${{ matrix.mongo }}, pymongo ${{ matrix.pymongo }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LOQUENT_SKIP_UI_BUILD: "1"
+      LOQUENT_TEST_MONGO_URL: mongodb://localhost:27017
+      CI: "true"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { mongo: "8.0", pymongo: "pymongo>=4.10" }
+          - { mongo: "7.0", pymongo: "pymongo>=4.10" }
+          - { mongo: "8.0", pymongo: "pymongo==4.9.*" }
+    services:
+      mongo:
+        image: mongo:${{ matrix.mongo }}
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+          --health-start-period 10s
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: ${{ toJSON(inputs.cache) != 'false' }}
+          cache-dependency-glob: uv.lock
+      - run: uv sync --locked --extra mongo
+      - run: uv pip install "$PYMONGO_SPEC"
+        env:
+          PYMONGO_SPEC: ${{ matrix.pymongo }}
+      - run: uv run --no-sync pytest -q -rs -m mongo tests/store
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LOQUENT_SKIP_UI_BUILD: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: ${{ toJSON(inputs.cache) != 'false' }}
+          cache-dependency-glob: uv.lock
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: ${{ toJSON(inputs.cache) != 'false' && 'npm' || '' }}
+          package-manager-cache: ${{ toJSON(inputs.cache) != 'false' }}
+          cache-dependency-path: frontend/package-lock.json
+      - run: uv sync --locked
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm run e2e
+        working-directory: frontend
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-test-results
+          path: frontend/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: ${{ toJSON(inputs.cache) != 'false' }}
+          cache-dependency-glob: uv.lock
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: ${{ toJSON(inputs.cache) != 'false' && 'npm' || '' }}
+          package-manager-cache: ${{ toJSON(inputs.cache) != 'false' }}
+          cache-dependency-path: frontend/package-lock.json
+      - run: uv build
+      - name: Assert dist contents
+        shell: python
+        run: |
+          import sys
+          import tarfile
+          import zipfile
+          from pathlib import Path
+
+          dist = Path("dist")
+          sdists = sorted(dist.glob("*.tar.gz"))
+          wheels = sorted(dist.glob("*-py3-none-any.whl"))
+          assert len(sdists) == 1, f"expected 1 sdist, got {sdists}"
+          assert len(wheels) == 1, f"expected 1 py3-none-any wheel, got {wheels}"
+
+          with zipfile.ZipFile(wheels[0]) as wheel:
+              names = wheel.namelist()
+          assert "loquent/server/static/index.html" in names, "wheel is missing static/index.html"
+          assert any(n.startswith("loquent/server/static/assets/") and not n.endswith("/") for n in names), (
+              "wheel has no static/assets files"
+          )
+
+          with tarfile.open(sdists[0]) as sdist:
+              names = sdist.getnames()
+          assert any(n.endswith("frontend/package-lock.json") for n in names), "sdist is missing frontend/package-lock.json"
+          assert not any("/node_modules/" in n for n in names), "sdist contains node_modules"
+          assert not any("/server/static/" in n for n in names), "sdist contains the built static files"
+          print("dist contents ok:", sdists[0].name, wheels[0].name)
+          sys.exit(0)
+      - run: uvx twine check --strict dist/*.whl dist/*.tar.gz
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  wheel-smoke:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container: python:3.12-slim
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+      - name: Assert no Node toolchain
+        run: |
+          if command -v node || command -v npm; then
+            echo "node or npm is on PATH; this job must run without them" >&2
+            exit 1
+          fi
+      - name: Install the wheel
+        run: |
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install --quiet dist/*.whl
+      - name: Serve the e2e fixture and probe it
+        run: |
+          cd /tmp
+          /tmp/venv/bin/loquent serve "$GITHUB_WORKSPACE/frontend/e2e/fixtures/agent.py:agent" \
+            --port 8000 --store sqlite:////tmp/s.db > /tmp/serve.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          /tmp/venv/bin/python - <<'PY'
+          import re
+          import sys
+          import time
+          import urllib.request
+
+          base = "http://127.0.0.1:8000"
+          deadline = time.monotonic() + 30
+          while True:
+              try:
+                  with urllib.request.urlopen(f"{base}/healthz", timeout=2) as r:
+                      if r.status == 200:
+                          break
+              except OSError:
+                  pass
+              if time.monotonic() > deadline:
+                  sys.exit("server did not become healthy within 30 s")
+              time.sleep(0.5)
+
+          with urllib.request.urlopen(f"{base}/", timeout=5) as r:
+              html = r.read().decode()
+          assert '<base href="/">' in html, "index.html is missing <base href=\"/\">"
+          match = re.search(r'(?:src|href)="(?:\./|/)?(assets/[^"]+\.js)"', html)
+          assert match, "index.html references no assets/*.js"
+          with urllib.request.urlopen(f"{base}/{match.group(1)}", timeout=5) as r:
+              assert r.status == 200, f"{match.group(1)} returned {r.status}"
+          print("wheel smoke ok:", match.group(1))
+          PY
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/serve.log || true
+      - name: Install the mongo extra
+        run: |
+          /tmp/venv/bin/pip install --quiet "$(echo dist/*.whl)[mongo]"
+          cd /tmp && /tmp/venv/bin/python -c "import loquent.store.mongo"
+
+  slow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LOQUENT_REQUIRE_NPM: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: ${{ toJSON(inputs.cache) != 'false' }}
+          cache-dependency-glob: uv.lock
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: ${{ toJSON(inputs.cache) != 'false' && 'npm' || '' }}
+          package-manager-cache: ${{ toJSON(inputs.cache) != 'false' }}
+          cache-dependency-path: frontend/package-lock.json
+      - run: uv sync --locked
+      - run: uv run pytest -q -rs -m slow
+
+  release-config:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
+          package-manager-cache: false
+      - run: node scripts/check_release_lockfile.mjs
+      - run: node scripts/check_release_tag.mjs
+
+  ci-ok:
+    if: always()
+    needs: [lint, pr-title, frontend, test, mongo, e2e, build, wheel-smoke, slow, release-config]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - name: Evaluate needed jobs
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: bash .github/scripts/ci_ok.sh "$NEEDS" "$EVENT_NAME"

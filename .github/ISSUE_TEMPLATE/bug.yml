@@ -1,0 +1,59 @@
+name: Bug report
+description: Something does not work as documented
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Loquent version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version and OS
+      placeholder: "3.12 on Ubuntu 24.04"
+    validations:
+      required: true
+  - type: dropdown
+    id: how
+    attributes:
+      label: How are you running Loquent?
+      options:
+        - loquent serve (CLI)
+        - loquent.serve() / ASGI app in my own code
+        - Docker or another container
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent type
+      options:
+        - Plain Python function or async generator
+        - OpenAI-compatible URL (OpenAI, Ollama, vLLM, ...)
+        - AG-UI agent (LangGraph, Pydantic AI, ...)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: A minimal agent and the commands you ran.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Server output and browser console errors, with secrets removed.
+      render: shell

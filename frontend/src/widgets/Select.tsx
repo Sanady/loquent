@@ -15,6 +15,11 @@ export function parseOptions(raw: unknown): Option[] | null {
       out.push({ value: o, label: o }); // the server accepts plain strings too
       continue;
     }
+    if (Array.isArray(o)) {
+      if (o.length !== 2 || typeof o[0] !== "string" || typeof o[1] !== "string") return null;
+      out.push({ value: o[0], label: o[1] }); // [value, label] pair
+      continue;
+    }
     if (!o || typeof o !== "object") return null;
     const { value, label } = o as Record<string, unknown>;
     if (typeof value !== "string") return null;

@@ -13,6 +13,7 @@ from loquent.auth import (
     SessionManager,
     check_bind_safety,
     hash_password,
+    is_loopback,
     verify_password,
 )
 from loquent.settings import Settings
@@ -27,8 +28,12 @@ class FakeStore:
 
         from loquent.store.models import User
 
-        u = User(id=f"u{len(self.users)}", username=username, password_hash=password_hash,
-                 created_at=datetime.now(UTC))
+        u = User(
+            id=f"u{len(self.users)}",
+            username=username,
+            password_hash=password_hash,
+            created_at=datetime.now(UTC),
+        )
         self.users[u.id] = u
         return u
 
@@ -176,3 +181,28 @@ async def test_no_auth_concurrent_first_requests():
         a.current_user(make_request(), store), a.current_user(make_request(), store)
     )
     assert u1.username == "local" and u1.id == u2.id
+
+
+@pytest.mark.parametrize("host", ["testclient"])
+def test_testclient_counts_as_loopback(host):
+    assert is_loopback(host) is True
+
+
+@pytest.mark.parametrize("host", ["TESTCLIENT", "testclient.evil", "localhost", ""])
+def test_other_names_still_refused(host):
+    assert is_loopback(host) is False
+
+
+@pytest.mark.filterwarnings("ignore:Using `httpx` with `starlette.testclient`")
+async def test_starlette_testclient_gets_through_auth_none():
+    from starlette.testclient import TestClient
+
+    from loquent.adapters.function import FunctionAdapter
+    from loquent.server.app import create_app
+    from loquent.store.sqlite import SqliteStore
+
+    app = create_app(
+        FunctionAdapter(lambda m: "x"), Settings(), SqliteStore(":memory:"), None, NoAuth(), None
+    )
+    with TestClient(app) as c:
+        assert c.get("/api/threads", headers={"X-Loquent-CSRF": "1"}).status_code == 200

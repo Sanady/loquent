@@ -85,6 +85,10 @@ async def test_readme_extending_examples(tmp_path):
                                  "code": "agent_error"}  # fmt: skip
 
         for _ in range(8):
-            await c.post("/api/runs", json={"input": {"type": "message", "content": "x"}}, headers=h)
-        r = await c.post("/api/runs", json={"input": {"type": "message", "content": "x"}}, headers=h)
+            await c.post(
+                "/api/runs", json={"input": {"type": "message", "content": "x"}}, headers=h
+            )
+        r = await c.post(
+            "/api/runs", json={"input": {"type": "message", "content": "x"}}, headers=h
+        )
         assert r.status_code == 429 and r.json() == {"error": "rate_limited"}

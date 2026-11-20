@@ -298,6 +298,7 @@ export function createAppStore(
 
     /** After sign-in: reopen the thread named in the URL, if any. */
     async function restoreThread() {
+      if (get().starting) return; // a send is mid-start; don't swap the thread under it
       const id = threadFromHash();
       if (id && get().currentThreadId === null) await openThreadImpl(id, true);
     }
