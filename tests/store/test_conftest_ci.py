@@ -43,6 +43,16 @@ def test_mongo_fixture_skips_without_ci(pytester, monkeypatch):
     res.assert_outcomes(skipped=1)
 
 
+def test_ping_timeout_env_is_honoured(pytester, monkeypatch):
+    monkeypatch.setenv("CI", "true")
+    monkeypatch.setenv("LOQUENT_TEST_MONGO_TIMEOUT_S", "0.2")
+    monkeypatch.setenv("LOQUENT_TEST_MONGO_URL", "mongodb://10.255.255.1:27017")  # black hole
+    _setup(pytester)
+    res = pytester.runpytest("-k", "mongo")
+    res.assert_outcomes(errors=1, skipped=0, failed=0)
+    assert res.duration < 5  # the default 10 s would blow past this
+
+
 def test_not_mongo_marker_deselects_all_mongo_params(pytester):
     _setup(pytester)
     res = pytester.runpytest("--collect-only", "-q", "-m", "not mongo")

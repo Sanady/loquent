@@ -19,7 +19,8 @@ def mongo_url():
     if url:
         from pymongo import MongoClient
 
-        client = MongoClient(url, serverSelectionTimeoutMS=2000)
+        ms = int(float(os.environ.get("LOQUENT_TEST_MONGO_TIMEOUT_S", "10")) * 1000)
+        client = MongoClient(url, serverSelectionTimeoutMS=ms, connectTimeoutMS=ms)
         try:
             client.admin.command("ping")
         except Exception as e:  # noqa: BLE001
