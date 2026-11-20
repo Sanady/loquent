@@ -1,7 +1,35 @@
 [project]
 name = "loquent"
 version = "0.1.0"
-description = "Serve a chat UI over AG-UI, the open agent-to-UI protocol."
+description = "Chat UI for any LLM or AI agent in a few lines of Python. AG-UI native, Chainlit alternative."
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+keywords = [
+    "chat ui",
+    "llm",
+    "ai agent",
+    "chatbot",
+    "ag-ui",
+    "chainlit alternative",
+    "langgraph",
+    "openai",
+    "ollama",
+    "streaming",
+    "fastapi",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Framework :: FastAPI",
+    "Framework :: AsyncIO",
+    "License :: OSI Approved :: Apache Software License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: User Interfaces",
+]
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -16,6 +44,14 @@ dependencies = [
     "itsdangerous>=2.2.0",
     "python-multipart>=0.0.34",
 ]
+
+[project.urls]
+
+Homepage = "https://github.com/Sanady/loquent"
+Source = "https://github.com/Sanady/loquent"
+Issues = "https://github.com/Sanady/loquent/issues"
+Changelog = "https://github.com/Sanady/loquent/blob/main/CHANGELOG.md"
+
 
 [project.scripts]
 loquent = "loquent.cli:main"
@@ -46,7 +82,7 @@ artifacts = ["src/loquent/server/static/**"]
 
 [tool.hatch.build.targets.sdist]
 # frontend/ sources are included so a wheel can be rebuilt from the sdist.
-include = ["/src", "/frontend", "/tests", "/hatch_build.py", "/README.md"]
+include = ["/src", "/frontend", "/tests", "/hatch_build.py", "/README.md", "/LICENSE", "/CHANGELOG.md"]
 exclude = ["node_modules", "test-results", "playwright-report", "__pycache__"]
 
 [tool.hatch.build.hooks.custom]
@@ -56,7 +92,10 @@ exclude = ["node_modules", "test-results", "playwright-report", "__pycache__"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
-markers = ["mongo: contract tests that need a real MongoDB (fail, not skip, under CI)"]
+markers = [
+    "mongo: contract tests that need a real MongoDB (fail, not skip, under CI)",
+    "slow: builds the wheel and sdist (run with -m slow, skip with -m 'not slow')",
+]
 
 [tool.ruff]
 line-length = 100
