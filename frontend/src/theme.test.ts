@@ -86,7 +86,41 @@ describe("brand palettes (R25) and derived contrast", () => {
       expect(contrast(rgb(v["--lq-text"]), rgb(v["--lq-bg-subtle"]))).toBeGreaterThanOrEqual(AA);
       expect(contrast(rgb(v["--lq-text"]), rgb(v["--lq-code-bg"]))).toBeGreaterThanOrEqual(AA);
       expect(contrast(rgb(v["--lq-text-muted"]), rgb(v["--lq-surface"]))).toBeGreaterThanOrEqual(AA);
+      // text-subtle is non-essential text only: held to 3:1, like the built-in themes.
+      expect(contrast(rgb(v["--lq-text-subtle"]), b)).toBeGreaterThanOrEqual(3);
+      expect(contrast(rgb(v["--lq-text-subtle"]), rgb(v["--lq-surface"]))).toBeGreaterThanOrEqual(3);
     }
+  });
+
+  it("mid-tone backgrounds still derive text that meets every floor", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    for (const bg of ["#777777", "#808080", "#999999", "#6b6b6b", "#4a7a8c"]) {
+      const v = resolveTheme({ background: bg }).vars;
+      const b = rgb(bg);
+      const at = (fg: string, against: string) => contrast(rgb(v[fg]), rgb(against));
+      expect(at("--lq-text", bg), `text on ${bg}`).toBeGreaterThanOrEqual(AA);
+      expect(at("--lq-text-muted", bg), `text-muted on ${bg}`).toBeGreaterThanOrEqual(AA);
+      expect(at("--lq-text-subtle", bg), `text-subtle on ${bg}`).toBeGreaterThanOrEqual(3);
+      expect(at("--lq-text-subtle", v["--lq-surface"]), `text-subtle on surface of ${bg}`).toBeGreaterThanOrEqual(3);
+      expect(at("--lq-user-bubble-text", v["--lq-user-bubble"]), `user-bubble-text on ${bg}`).toBeGreaterThanOrEqual(AA);
+      expect(contrast(rgb(v["--lq-text"]), b)).toBeGreaterThanOrEqual(AA);
+    }
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("a brand text or muted below the floor is kept, with one warning", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const brand = { background: "#777777", text: "#555555", muted: "#6a6a6a" };
+    const v = resolveTheme(brand).vars;
+    expect(v["--lq-text"]).toBe("#555555");
+    expect(v["--lq-text-muted"]).toBe("#6a6a6a");
+    // Derived tokens still meet their floors.
+    expect(contrast(rgb(v["--lq-user-bubble-text"]), rgb(v["--lq-user-bubble"]))).toBeGreaterThanOrEqual(AA);
+    expect(contrast(rgb(v["--lq-text-subtle"]), rgb("#777777"))).toBeGreaterThanOrEqual(3);
+    resolveTheme(brand); // re-resolving the same palette doesn't warn again
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn.mock.calls[0][0]).toMatch(/text.*#555555.*\d\.\d+:1/);
+    expect(warn.mock.calls[1][0]).toMatch(/muted.*#6a6a6a.*\d\.\d+:1/);
   });
 
   it("on-accent is white on dark accents and near-black on light ones", () => {

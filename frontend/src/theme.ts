@@ -94,9 +94,45 @@ export function contrast(a: Rgb, b: Rgb): number {
 
 const isDark = (c: Rgb) => contrast(c, [255, 255, 255]) > contrast(c, [0, 0, 0]);
 
+const BLACK: Rgb = [0, 0, 0];
+const WHITE: Rgb = [255, 255, 255];
+
+function mixRgb(a: Rgb, b: Rgb, weightA: number): Rgb {
+  return a.map((v, i) => Math.round(v * weightA + b[i] * (1 - weightA))) as Rgb;
+}
+
+const toHex = (c: Rgb) => `#${c.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+
 function mix(a: Rgb, b: Rgb, weightA: number): string {
-  const hex = a.map((v, i) => Math.round(v * weightA + b[i] * (1 - weightA)).toString(16).padStart(2, "0"));
-  return `#${hex.join("")}`;
+  return toHex(mixRgb(a, b, weightA));
+}
+
+const minContrast = (fg: Rgb, against: readonly Rgb[]) => Math.min(...against.map((b) => contrast(fg, b)));
+
+/**
+ * `start`, or the first step from it toward the max-contrast ink (black or white, whichever
+ * contrasts more with `against`) that meets `floor` on every color in `against`. Mid-tone
+ * backgrounds need this: a fixed near-black or off-white ink can miss AA on them.
+ */
+function withFloor(start: Rgb, against: readonly Rgb[], floor: number): Rgb {
+  if (minContrast(start, against) >= floor) return start;
+  const ink = minContrast(BLACK, against) >= minContrast(WHITE, against) ? BLACK : WHITE;
+  for (let step = 1; step <= 20; step++) {
+    const c = mixRgb(ink, start, step / 20);
+    if (minContrast(c, against) >= floor) return c;
+  }
+  return ink;
+}
+
+/** Brand colors below their floor are kept (an explicit choice) but reported once each. */
+const warned = new Set<string>();
+function warnBelowFloor(key: string, value: string, background: string, ratio: number, floor: number) {
+  const id = `${key}|${value}|${background}`;
+  if (warned.has(id)) return;
+  warned.add(id);
+  console.warn(
+    `loquent theme: "${key}" ${value} has ${ratio.toFixed(2)}:1 contrast on background ${background}, below ${floor}:1; kept as configured.`,
+  );
 }
 
 // ---------- theme resolution (the legacy brand layer) ----------
@@ -176,8 +212,21 @@ export function resolveTheme(theme: Record<string, string> | null | undefined, t
 
   const bg = resolveColor(background);
   const dark = bg ? isDark(bg) : false;
-  const text = val("text") ?? (dark ? DARK_INK : LIGHT_INK);
-  const muted = val("muted") ?? (dark ? DARK_MUTED : LIGHT_MUTED);
+
+  // Text roles meet their floor on the actual background: text and muted 4.5:1. A derived
+  // value steps toward the max-contrast ink until it passes; a brand value is kept as set.
+  const textRole = (key: "text" | "muted", fallback: string, floor: number): string => {
+    const given = val(key);
+    if (!bg) return given ?? fallback;
+    if (given) {
+      const rgb = resolveColor(given);
+      if (rgb && contrast(rgb, bg) < floor) warnBelowFloor(key, given, background, contrast(rgb, bg), floor);
+      return given;
+    }
+    return toHex(withFloor(resolveColor(fallback)!, [bg], floor));
+  };
+  const text = textRole("text", dark ? DARK_INK : LIGHT_INK, 4.5);
+  const muted = textRole("muted", dark ? DARK_MUTED : LIGHT_MUTED, 4.5);
   const textRgb = resolveColor(text);
   const mutedRgb = resolveColor(muted);
   vars["--lq-bg"] = background;
@@ -197,10 +246,19 @@ export function resolveTheme(theme: Record<string, string> | null | undefined, t
   vars["--lq-border"] = tint(dark ? 0.16 : 0.11);
   vars["--lq-border-strong"] = tint(0.45);
   vars["--lq-user-bubble"] = tint(dark ? 0.1 : 0.06);
-  vars["--lq-user-bubble-text"] = text;
   vars["--lq-code-bg"] = tint(dark ? 0.05 : 0.035);
+
+  // user-bubble-text: the text color, stepped to 4.5:1 on the bubble when it falls short.
+  const bubble = resolveColor(vars["--lq-user-bubble"]);
+  const bubbleText = textRgb && bubble ? withFloor(textRgb, [bubble], 4.5) : null;
+  vars["--lq-user-bubble-text"] = bubbleText && bubbleText !== textRgb ? toHex(bubbleText) : text;
+
+  // text-subtle is for non-essential text only (timestamps, hints): held to 3:1 on bg and
+  // surface, the same rule as the built-in themes, never to body-copy AA.
   vars["--lq-text-subtle"] =
-    bg && mutedRgb ? mix(mutedRgb, bg, 0.8) : "color-mix(in srgb, var(--lq-text-muted) 80%, var(--lq-bg))";
+    bg && mutedRgb
+      ? toHex(withFloor(mixRgb(mutedRgb, bg, 0.8), surface ? [bg, surface] : [bg], 3))
+      : "color-mix(in srgb, var(--lq-text-muted) 80%, var(--lq-bg))";
 
   // interim: removed in Task 6 with styles.css (old names of the derived palette).
   legacy["--lq-text"] = text;
