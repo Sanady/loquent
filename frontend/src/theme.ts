@@ -61,10 +61,9 @@ export function parseColor(input: string): Rgb | null {
   return null;
 }
 
-/** Fall back to the browser's own parser (named colors, hsl(), ...) when available. */
-function resolveColor(input: string): Rgb | null {
-  const direct = parseColor(input);
-  if (direct || typeof document === "undefined" || !document.body) return direct;
+/** The browser's computed form of a color it understands (named colors, hsl(), ...), or null. */
+function computedColor(input: string): string | null {
+  if (typeof document === "undefined" || !document.body) return null;
   try {
     const probe = document.createElement("span");
     probe.style.color = input;
@@ -73,10 +72,35 @@ function resolveColor(input: string): Rgb | null {
     document.body.appendChild(probe);
     const computed = getComputedStyle(probe).color;
     probe.remove();
-    return parseColor(computed);
+    return computed;
   } catch {
     return null;
   }
+}
+
+/** Fall back to the browser's own parser (named colors, hsl(), ...) when available. */
+function resolveColor(input: string): Rgb | null {
+  const direct = parseColor(input);
+  if (direct) return direct;
+  const computed = computedColor(input);
+  return computed ? parseColor(computed) : null;
+}
+
+/** Alpha of a hex or rgb()/rgba() color string (1 when it has none); `transparent` is 0. */
+function alphaOf(input: string): number {
+  const s = input.trim().toLowerCase();
+  if (s === "transparent") return 0;
+  let m = /^#(?:[0-9a-f]{3}([0-9a-f])|[0-9a-f]{6}([0-9a-f]{2}))$/.exec(s);
+  if (m) return m[1] ? parseInt(m[1] + m[1], 16) / 255 : parseInt(m[2], 16) / 255;
+  m = /^rgba?\(\s*[\d.]+[\s,]+[\d.]+[\s,]+[\d.]+\s*[,/]\s*([\d.]+)(%?)\s*\)$/.exec(s);
+  if (m) return m[2] ? Number(m[1]) / 100 : Number(m[1]);
+  return 1;
+}
+
+/** An opaque color, or null when it is translucent or can't be parsed (contrast is then unknowable). */
+function resolveOpaque(input: string): Rgb | null {
+  const str = parseColor(input) ? input : computedColor(input);
+  return str && alphaOf(str) >= 1 ? parseColor(str) : null;
 }
 
 export function luminance([r, g, b]: Rgb): number {
@@ -109,6 +133,9 @@ function mix(a: Rgb, b: Rgb, weightA: number): string {
 
 const minContrast = (fg: Rgb, against: readonly Rgb[]) => Math.min(...against.map((b) => contrast(fg, b)));
 
+/** Pure black or white, whichever has the higher minimum contrast on `against`. */
+const bestInk = (against: readonly Rgb[]): Rgb => (minContrast(BLACK, against) >= minContrast(WHITE, against) ? BLACK : WHITE);
+
 /**
  * `start`, or the first step from it toward the max-contrast ink (black or white, whichever
  * contrasts more with `against`) that meets `floor` on every color in `against`. Mid-tone
@@ -116,7 +143,7 @@ const minContrast = (fg: Rgb, against: readonly Rgb[]) => Math.min(...against.ma
  */
 function withFloor(start: Rgb, against: readonly Rgb[], floor: number): Rgb {
   if (minContrast(start, against) >= floor) return start;
-  const ink = minContrast(BLACK, against) >= minContrast(WHITE, against) ? BLACK : WHITE;
+  const ink = bestInk(against);
   for (let step = 1; step <= 20; step++) {
     const c = mixRgb(ink, start, step / 20);
     if (minContrast(c, against) >= floor) return c;
@@ -124,14 +151,19 @@ function withFloor(start: Rgb, against: readonly Rgb[], floor: number): Rgb {
   return ink;
 }
 
-/** Brand colors below their floor are kept (an explicit choice) but reported once each. */
+/** Each theme warning is logged once per page: resolveTheme runs on every render. */
 const warned = new Set<string>();
-function warnBelowFloor(key: string, value: string, background: string, ratio: number, floor: number) {
-  const id = `${key}|${value}|${background}`;
+function warnOnce(id: string, message: string) {
   if (warned.has(id)) return;
   warned.add(id);
-  console.warn(
-    `loquent theme: "${key}" ${value} has ${ratio.toFixed(2)}:1 contrast on background ${background}, below ${floor}:1; kept as configured.`,
+  console.warn(message);
+}
+
+/** Brand colors below their floor are kept (an explicit choice) but reported once each. */
+function warnBelowFloor(key: string, value: string, background: string, ratio: number, floor: number) {
+  warnOnce(
+    `${key}|${value}|${background}`,
+    `loquent theme: "${key}" ${value} has ${ratio.toFixed(2)}:1 contrast on background ${background} or its surfaces, below ${floor}:1; kept as configured.`,
   );
 }
 
@@ -212,21 +244,61 @@ export function resolveTheme(theme: Record<string, string> | null | undefined, t
 
   const bg = resolveColor(background);
   const dark = bg ? isDark(bg) : false;
+  // Contrast floors need an opaque background; a translucent or unparsable one is reported.
+  const floorBg = resolveOpaque(background);
+  if (!floorBg) {
+    warnOnce(
+      `background|${background}`,
+      `loquent theme: brand background could not be checked for contrast (${background}); derived text colors are not adjusted.`,
+    );
+  }
 
-  // Text roles meet their floor on the actual background: text and muted 4.5:1. A derived
-  // value steps toward the max-contrast ink until it passes; a brand value is kept as set.
-  const textRole = (key: "text" | "muted", fallback: string, floor: number): string => {
-    const given = val(key);
-    if (!bg) return given ?? fallback;
-    if (given) {
-      const rgb = resolveColor(given);
-      if (rgb && contrast(rgb, bg) < floor) warnBelowFloor(key, given, background, contrast(rgb, bg), floor);
-      return given;
+  const given = { text: val("text"), muted: val("muted") };
+  const fallback = { text: dark ? DARK_INK : LIGHT_INK, muted: dark ? DARK_MUTED : LIGHT_MUTED };
+  // First pass: the derived text floored on bg alone. The surfaces are tinted from it.
+  const firstText = given.text ?? (floorBg ? toHex(withFloor(resolveColor(fallback.text)!, [floorBg], 4.5)) : fallback.text);
+  const firstTextRgb = resolveColor(firstText);
+
+  // Surfaces are a tint of the text over the background. On a mid-tone, the best ink may
+  // miss 4.5:1 on a surface tinted toward it; that surface is tinted the other way instead.
+  const surfaceVal = val("surface");
+  const surfaceWeight = dark ? 0.07 : 0.045;
+  let surface: Rgb | null;
+  if (surfaceVal) {
+    vars["--lq-surface"] = surfaceVal;
+    surface = resolveColor(surfaceVal);
+  } else if (bg && firstTextRgb) {
+    surface = mixRgb(firstTextRgb, bg, surfaceWeight);
+    if (floorBg) {
+      const ink = bestInk([floorBg]);
+      if (contrast(ink, surface) < 4.5) surface = mixRgb(ink === BLACK ? WHITE : BLACK, bg, surfaceWeight);
     }
-    return toHex(withFloor(resolveColor(fallback)!, [bg], floor));
+    vars["--lq-surface"] = toHex(surface);
+  } else {
+    vars["--lq-surface"] = `color-mix(in srgb, var(--lq-text) ${Math.round(surfaceWeight * 100)}%, var(--lq-bg))`;
+    surface = null;
+  }
+  const raised = bg && surface ? mixRgb(surface, bg, 0.35) : null;
+  vars["--lq-surface-raised"] = raised ? toHex(raised) : "color-mix(in srgb, var(--lq-surface) 35%, var(--lq-bg))";
+
+  // Text roles meet 4.5:1 on bg, surface and surface-raised. A derived value steps toward the
+  // max-contrast ink until all pass; a brand value is kept as set (with one warning).
+  const targets = floorBg ? [floorBg, surface, raised].filter((c): c is Rgb => c !== null) : [];
+  const textRole = (key: "text" | "muted", start: string): string => {
+    const v = given[key];
+    if (v) {
+      const rgb = resolveColor(v);
+      const ratio = rgb && targets.length ? minContrast(rgb, targets) : Infinity;
+      if (ratio < 4.5) warnBelowFloor(key, v, background, ratio, 4.5);
+      return v;
+    }
+    const rgb = resolveColor(start);
+    if (!rgb || !targets.length) return start;
+    const out = withFloor(rgb, targets, 4.5);
+    return out === rgb ? start : toHex(out);
   };
-  const text = textRole("text", dark ? DARK_INK : LIGHT_INK, 4.5);
-  const muted = textRole("muted", dark ? DARK_MUTED : LIGHT_MUTED, 4.5);
+  const text = textRole("text", firstText);
+  const muted = textRole("muted", fallback.muted);
   const textRgb = resolveColor(text);
   const mutedRgb = resolveColor(muted);
   vars["--lq-bg"] = background;
@@ -236,12 +308,6 @@ export function resolveTheme(theme: Record<string, string> | null | undefined, t
   // A tint of the text color over the background: hex when both parse, color-mix otherwise.
   const tint = (weight: number) =>
     bg && textRgb ? mix(textRgb, bg, weight) : `color-mix(in srgb, var(--lq-text) ${Math.round(weight * 100)}%, var(--lq-bg))`;
-
-  const surfaceVal = val("surface");
-  vars["--lq-surface"] = surfaceVal ?? tint(dark ? 0.07 : 0.045);
-  const surface = resolveColor(vars["--lq-surface"]);
-  vars["--lq-surface-raised"] =
-    bg && surface ? mix(surface, bg, 0.35) : "color-mix(in srgb, var(--lq-surface) 35%, var(--lq-bg))";
   vars["--lq-bg-subtle"] = tint(dark ? 0.04 : 0.025);
   vars["--lq-border"] = tint(dark ? 0.16 : 0.11);
   vars["--lq-border-strong"] = tint(0.45);
@@ -249,15 +315,16 @@ export function resolveTheme(theme: Record<string, string> | null | undefined, t
   vars["--lq-code-bg"] = tint(dark ? 0.05 : 0.035);
 
   // user-bubble-text: the text color, stepped to 4.5:1 on the bubble when it falls short.
-  const bubble = resolveColor(vars["--lq-user-bubble"]);
+  const bubble = floorBg ? resolveColor(vars["--lq-user-bubble"]) : null;
   const bubbleText = textRgb && bubble ? withFloor(textRgb, [bubble], 4.5) : null;
   vars["--lq-user-bubble-text"] = bubbleText && bubbleText !== textRgb ? toHex(bubbleText) : text;
 
   // text-subtle is for non-essential text only (timestamps, hints): held to 3:1 on bg and
   // surface, the same rule as the built-in themes, never to body-copy AA.
+  const subtleTargets = floorBg ? (surface ? [floorBg, surface] : [floorBg]) : [];
   vars["--lq-text-subtle"] =
     bg && mutedRgb
-      ? toHex(withFloor(mixRgb(mutedRgb, bg, 0.8), surface ? [bg, surface] : [bg], 3))
+      ? toHex(subtleTargets.length ? withFloor(mixRgb(mutedRgb, bg, 0.8), subtleTargets, 3) : mixRgb(mutedRgb, bg, 0.8))
       : "color-mix(in srgb, var(--lq-text-muted) 80%, var(--lq-bg))";
 
   // interim: removed in Task 6 with styles.css (old names of the derived palette).

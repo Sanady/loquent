@@ -104,8 +104,28 @@ describe("brand palettes (R25) and derived contrast", () => {
       expect(at("--lq-text-subtle", v["--lq-surface"]), `text-subtle on surface of ${bg}`).toBeGreaterThanOrEqual(3);
       expect(at("--lq-user-bubble-text", v["--lq-user-bubble"]), `user-bubble-text on ${bg}`).toBeGreaterThanOrEqual(AA);
       expect(contrast(rgb(v["--lq-text"]), b)).toBeGreaterThanOrEqual(AA);
+      for (const fg of ["--lq-text", "--lq-text-muted"]) {
+        for (const surface of ["--lq-surface", "--lq-surface-raised"]) {
+          expect(at(fg, v[surface]), `${fg} on ${surface} of ${bg}`).toBeGreaterThanOrEqual(AA);
+        }
+      }
     }
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("a background that can't be checked for contrast warns once", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    for (const background of ["#ffffff80", "rgba(20, 20, 20, 0.5)", "transparent", "not-a-color"]) {
+      resolveTheme({ background });
+      resolveTheme({ background });
+    }
+    expect(warn).toHaveBeenCalledTimes(4);
+    for (const [msg] of warn.mock.calls) expect(msg).toMatch(/brand background could not be checked for contrast/);
+    // An opaque background with an alpha channel is still checked.
+    warn.mockClear();
+    const v = resolveTheme({ background: "#777777ff" }).vars;
+    expect(warn).not.toHaveBeenCalled();
+    expect(contrast(rgb(v["--lq-text"]), rgb(v["--lq-surface"]))).toBeGreaterThanOrEqual(AA);
   });
 
   it("a brand text or muted below the floor is kept, with one warning", () => {
