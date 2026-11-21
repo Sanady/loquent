@@ -50,7 +50,8 @@ async def test_config_has_no_secrets():
         assert "upstream.internal" not in r.text
         assert set(body) == {
             "app_name", "logo_url", "theme", "hide", "auth", "widgets", "attachments",
-            "max_upload_mb", "allowed_upload_types",
+            "max_upload_mb", "allowed_upload_types", "default_theme", "themes",
+            "allow_user_css", "allow_user_prefs", "lock_tokens", "max_user_css_kb",
         }  # fmt: skip
         assert body["app_name"] == "Acme Help"
         assert body["logo_url"] is None
@@ -60,6 +61,34 @@ async def test_config_has_no_secrets():
         assert body["max_upload_mb"] == 20
         assert isinstance(body["widgets"], bool)
         assert body["attachments"] is False  # no file store configured yet
+
+
+async def test_config_exposes_theme_settings():
+    async with make_client() as c:
+        body = (await c.get("/api/config")).json()
+        assert body["default_theme"] == "system"
+        assert body["themes"] == ["graphite", "graphite-dark", "editorial", "midnight"]
+        assert body["allow_user_css"] is True
+        assert body["allow_user_prefs"] is True
+        assert body["lock_tokens"] == []
+        assert body["max_user_css_kb"] == 64
+
+    settings = Settings(
+        default_theme="editorial",
+        themes=["editorial", "midnight"],
+        allow_user_css=False,
+        allow_user_prefs=False,
+        lock_tokens=["accent"],
+        max_user_css_kb=8,
+    )
+    async with make_client(settings=settings) as c:
+        body = (await c.get("/api/config")).json()
+        assert body["default_theme"] == "editorial"
+        assert body["themes"] == ["editorial", "midnight"]
+        assert body["allow_user_css"] is False
+        assert body["allow_user_prefs"] is False
+        assert body["lock_tokens"] == ["accent"]
+        assert body["max_user_css_kb"] == 8
 
 
 async def test_security_headers_present():

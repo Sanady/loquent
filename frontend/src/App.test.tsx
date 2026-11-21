@@ -1,8 +1,11 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
+import { loadThemeFonts } from "./fonts";
 import { createAppStore } from "./state/store";
 import { botMsg, defaultConfig, fakeApi, readyStore, userMsg, view } from "./test/helpers";
+
+vi.mock("./fonts", () => ({ loadThemeFonts: vi.fn(async () => {}) }));
 
 const threads = [
   { id: "t1", title: "First chat", updated_at: new Date().toISOString() },
@@ -125,21 +128,56 @@ describe("App", () => {
     expect(openThread).toHaveBeenCalledWith("t2");
   });
 
-  it("theme toggle flips the color mode and persists it", async () => {
-    const { container } = await renderApp();
+  it("theme button cycles the allowed themes without persisting a color mode", async () => {
+    vi.mocked(loadThemeFonts).mockClear();
+    const { container } = await renderApp(defaultConfig({ default_theme: "graphite", themes: ["graphite", "midnight", "editorial"] }));
+    const html = document.documentElement;
     const root = container.querySelector(".lq-root")!;
-    const before = root.getAttribute("data-mode");
-    fireEvent.click(screen.getByRole("button", { name: /switch to (dark|light) theme/i }));
-    const after = root.getAttribute("data-mode");
-    expect(after).not.toBe(before);
-    expect(localStorage.getItem("lq-color-mode")).toBe(after);
+    expect(html.getAttribute("data-lq-theme")).toBe("graphite");
+    // interim: the legacy stylesheet's dark mode follows the theme's scheme.
+    expect(root.getAttribute("data-mode")).toBe("light");
+    expect(loadThemeFonts).toHaveBeenLastCalledWith("graphite");
+
+    fireEvent.click(screen.getByRole("button", { name: "Theme: Graphite" }));
+    expect(html.getAttribute("data-lq-theme")).toBe("midnight");
+    expect(html.getAttribute("data-lq-scheme")).toBe("dark");
+    expect(root.getAttribute("data-mode")).toBe("dark");
+    expect(loadThemeFonts).toHaveBeenLastCalledWith("midnight");
+
+    fireEvent.click(screen.getByRole("button", { name: "Theme: Midnight" }));
+    expect(html.getAttribute("data-lq-theme")).toBe("editorial");
+    fireEvent.click(screen.getByRole("button", { name: "Theme: Editorial" }));
+    expect(html.getAttribute("data-lq-theme")).toBe("graphite");
+    expect(localStorage.getItem("lq-color-mode")).toBeNull();
   });
-  it("a brand background fixes the scheme and hides the theme toggle (R25)", async () => {
-    localStorage.setItem("lq-color-mode", "light");
-    const { container } = await renderApp(defaultConfig({ theme: { background: "#111111", text: "#eeeeee" } }));
-    expect(container.querySelector(".lq-root")!.getAttribute("data-mode")).toBe("dark");
+
+  it("the effective theme follows the system scheme and loads its fonts", async () => {
+    vi.mocked(loadThemeFonts).mockClear();
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("dark"), addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList);
+    try {
+      await renderApp(defaultConfig());
+      expect(document.documentElement.getAttribute("data-lq-theme")).toBe("midnight");
+      expect(loadThemeFonts).toHaveBeenCalledWith("midnight");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("the theme button is hidden when only one theme is allowed", async () => {
+    await renderApp(defaultConfig({ default_theme: "editorial", themes: ["editorial"] }));
+    expect(document.documentElement.getAttribute("data-lq-theme")).toBe("editorial");
+    expect(screen.queryByRole("button", { name: /^theme:/i })).toBeNull();
+  });
+
+  it("a brand background fixes the scheme in every theme (R25)", async () => {
+    const { container } = await renderApp(defaultConfig({ default_theme: "graphite", theme: { background: "#111111", text: "#eeeeee" } }));
+    const root = container.querySelector(".lq-root")!;
+    expect(root.getAttribute("data-mode")).toBe("dark");
     expect(document.documentElement.getAttribute("data-lq-custom-colors")).toBe("background surface text muted");
-    expect(screen.queryByRole("button", { name: /switch to (dark|light) theme/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^theme:/i }));
+    expect(document.documentElement.getAttribute("data-lq-theme")).toBe("graphite-dark");
+    expect(root.getAttribute("data-mode")).toBe("dark");
+    expect(document.documentElement.style.getPropertyValue("--lq-bg")).toBe("#111111");
   });
 
   it("thread titles are shown without markdown syntax", async () => {

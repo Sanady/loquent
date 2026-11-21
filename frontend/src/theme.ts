@@ -1,21 +1,38 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { loadThemeFonts } from "./fonts";
+import { COLOR_TOKENS, THEME_SCHEME, THEME_TOKENS, THEMES, type ColorToken, type ThemeId } from "./themes";
 
-/** `config.theme` keys the UI understands; each maps to a `--lq-<key>` CSS variable. */
+/**
+ * Legacy `config.theme` keys: the developer brand layer. It sits on top of the active theme
+ * and below user prefs and user CSS. Mapping onto the theme tokens (`--lq-<token>`):
+ *   accent      -> accent, plus derived accent-hover, accent-soft, accent-text (every theme)
+ *   background  -> bg          surface -> surface    text -> text    muted -> text-muted
+ *   radius      -> radius-sm/md/lg/xl (lg is the configured value)
+ *   font        -> font-body
+ * With `background` set, the remaining surfaces (bg-subtle, surface-raised, border,
+ * border-strong, user-bubble, user-bubble-text, code-bg, text-subtle) are derived from it and
+ * the brand palette applies in every theme (R25). Without it, the color keys other than
+ * accent apply to light themes only.
+ */
 export const THEME_KEYS = ["accent", "background", "surface", "text", "muted", "radius", "font"] as const;
 
 /** Palette keys that have a built-in dark value (styles.css gates those overrides per key). */
 export const PALETTE_KEYS = ["background", "surface", "text", "muted"] as const;
 
-/** Attribute on <html> listing the palette keys that are brand-fixed (dark overrides skip them). */
+/** Attribute on <html> listing the palette keys that are brand-fixed (R25). */
 export const CUSTOM_ATTR = "data-lq-custom-colors";
 
-/** Variables theme.ts may set besides the THEME_KEYS ones; cleared when no longer derived. */
-const DERIVED_VARS = ["--lq-on-accent", "--lq-elevated"] as const;
+/** Locking a token also locks the tokens derived from it. */
+export const LOCK_DERIVED: Partial<Record<ColorToken, readonly ColorToken[]>> = {
+  accent: ["accent-hover", "accent-soft", "accent-text"],
+};
 
 export type ColorMode = "light" | "dark";
+export type ThemePref = ThemeId | "system";
+export type Density = "comfortable" | "compact";
+export type TextSize = "s" | "m" | "l";
 type Rgb = [number, number, number];
 
-const MODE_KEY = "lq-color-mode";
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
 const LIGHT_INK = "#1f1e1c";
@@ -82,98 +99,232 @@ function mix(a: Rgb, b: Rgb, weightA: number): string {
   return `#${hex.join("")}`;
 }
 
-// ---------- theme resolution ----------
+// ---------- theme resolution (the legacy brand layer) ----------
 
 export interface ResolvedTheme {
-  /** CSS variables to set on <html>. */
+  /** Theme tokens (`--lq-<token>`) the brand sets for the requested scheme. */
   vars: Record<string, string>;
-  /** Palette keys that are brand-fixed in both color modes. */
+  /**
+   * interim: removed in Task 6 with styles.css. The same brand under the old variable names
+   * the legacy stylesheet reads (--lq-background, --lq-muted, --lq-on-accent, --lq-elevated,
+   * --lq-radius, --lq-font, plus the shared --lq-accent, --lq-surface and --lq-text).
+   */
+  legacy: Record<string, string>;
+  /** Palette keys that are brand-fixed in every theme. */
   custom: string[];
-  /** The scheme a brand palette implies (from its background), or null when the built-in palette applies. */
+  /** The scheme a brand palette implies (from its background), or null when the theme's applies. */
   scheme: ColorMode | null;
 }
 
+/** Radius scale from the one legacy `radius` value: lg is the configured radius. */
+const RADIUS_SCALE: Record<string, number> = { "--lq-radius-sm": 0.5, "--lq-radius-md": 0.67, "--lq-radius-lg": 1, "--lq-radius-xl": 1.33 };
+
+/** Text color for accent fills: near-black or white, whichever contrasts more. */
+function onAccent(rgb: Rgb): string {
+  return contrast(rgb, [17, 17, 17]) >= contrast(rgb, [255, 255, 255]) ? ON_LIGHT : ON_DARK;
+}
+
+/** The accent and the tokens derived from it. accent-text is omitted when the color can't be parsed. */
+function accentFamily(accent: string): Record<string, string> {
+  const vars: Record<string, string> = {
+    "--lq-accent": accent,
+    "--lq-accent-hover": `color-mix(in srgb, ${accent} 85%, var(--lq-text))`,
+    "--lq-accent-soft": `color-mix(in srgb, ${accent} 14%, transparent)`,
+  };
+  const rgb = resolveColor(accent);
+  if (rgb) vars["--lq-accent-text"] = onAccent(rgb);
+  return vars;
+}
+
 /**
- * Turn `config.theme` into CSS variables.
+ * Turn `config.theme` into theme tokens for a theme of the given scheme.
  *
- * - Every known key maps to `--lq-<key>`; unknown keys are ignored.
- * - `--lq-on-accent` (text on accent fills) is picked by contrast against the accent.
+ * - Every known key maps onto its token(s); unknown keys are ignored.
+ * - accent-text (text on accent fills) is picked by contrast against the accent.
  * - When `background` is set, the developer owns the palette (R25): missing surface/text/muted
- *   are derived from it so the result is readable, the elevated surface is derived from the
- *   configured colors, and all four palette keys are marked custom so the built-in dark
- *   palette never overrides them. Without `background`, configured colors are light-mode
- *   tweaks and dark mode keeps the built-in palette.
+ *   are derived from it so the result is readable, the other surfaces are derived from the
+ *   configured colors, and all four palette keys are marked custom. The palette then applies
+ *   in every theme. Without `background`, the palette keys are light-theme tweaks: for a dark
+ *   theme they are left out and the theme's own colors apply.
  */
-export function resolveTheme(theme: Record<string, string> | null | undefined): ResolvedTheme {
+export function resolveTheme(theme: Record<string, string> | null | undefined, themeScheme: ColorMode = "light"): ResolvedTheme {
   const vars: Record<string, string> = {};
+  const legacy: Record<string, string> = {};
   const val = (k: string) => {
     const v = theme?.[k];
     return typeof v === "string" && v.trim() ? v.trim() : null;
   };
   for (const key of THEME_KEYS) {
     const v = val(key);
-    if (v) vars[`--lq-${key}`] = v;
+    if (v) legacy[`--lq-${key}`] = v;
   }
 
+  const radius = val("radius");
+  if (radius) for (const [name, f] of Object.entries(RADIUS_SCALE)) vars[name] = f === 1 ? radius : `calc(${radius} * ${f})`;
+  const font = val("font");
+  if (font) vars["--lq-font-body"] = font;
   const accent = val("accent");
-  const accentRgb = accent ? resolveColor(accent) : null;
-  if (accentRgb) vars["--lq-on-accent"] = contrast(accentRgb, [17, 17, 17]) >= contrast(accentRgb, [255, 255, 255]) ? ON_LIGHT : ON_DARK;
+  if (accent) Object.assign(vars, accentFamily(accent));
+  if (vars["--lq-accent-text"]) legacy["--lq-on-accent"] = vars["--lq-accent-text"];
 
   const background = val("background");
-  if (!background) return { vars, custom: [], scheme: null };
+  if (!background) {
+    const palette = { "--lq-surface": val("surface"), "--lq-text": val("text"), "--lq-text-muted": val("muted") };
+    if (themeScheme === "light") for (const [name, v] of Object.entries(palette)) if (v) vars[name] = v;
+    return { vars, legacy, custom: [], scheme: null };
+  }
 
   const bg = resolveColor(background);
   const dark = bg ? isDark(bg) : false;
-  if (!val("text")) vars["--lq-text"] = dark ? DARK_INK : LIGHT_INK;
-  if (!val("muted")) vars["--lq-muted"] = dark ? DARK_MUTED : LIGHT_MUTED;
-  const text = resolveColor(vars["--lq-text"]);
-  const surfaceVal = val("surface");
-  let surface = surfaceVal ? resolveColor(surfaceVal) : null;
-  if (!surfaceVal) {
-    if (bg && text) {
-      vars["--lq-surface"] = mix(text, bg, dark ? 0.07 : 0.045);
-      surface = resolveColor(vars["--lq-surface"]);
-    } else {
-      vars["--lq-surface"] = "color-mix(in srgb, var(--lq-text) 6%, var(--lq-background))";
-    }
-  }
-  vars["--lq-elevated"] =
-    bg && surface ? mix(surface, bg, 0.35) : "color-mix(in srgb, var(--lq-surface) 35%, var(--lq-background))";
+  const text = val("text") ?? (dark ? DARK_INK : LIGHT_INK);
+  const muted = val("muted") ?? (dark ? DARK_MUTED : LIGHT_MUTED);
+  const textRgb = resolveColor(text);
+  const mutedRgb = resolveColor(muted);
+  vars["--lq-bg"] = background;
+  vars["--lq-text"] = text;
+  vars["--lq-text-muted"] = muted;
 
-  return { vars, custom: [...PALETTE_KEYS], scheme: bg ? (dark ? "dark" : "light") : null };
+  // A tint of the text color over the background: hex when both parse, color-mix otherwise.
+  const tint = (weight: number) =>
+    bg && textRgb ? mix(textRgb, bg, weight) : `color-mix(in srgb, var(--lq-text) ${Math.round(weight * 100)}%, var(--lq-bg))`;
+
+  const surfaceVal = val("surface");
+  vars["--lq-surface"] = surfaceVal ?? tint(dark ? 0.07 : 0.045);
+  const surface = resolveColor(vars["--lq-surface"]);
+  vars["--lq-surface-raised"] =
+    bg && surface ? mix(surface, bg, 0.35) : "color-mix(in srgb, var(--lq-surface) 35%, var(--lq-bg))";
+  vars["--lq-bg-subtle"] = tint(dark ? 0.04 : 0.025);
+  vars["--lq-border"] = tint(dark ? 0.16 : 0.11);
+  vars["--lq-border-strong"] = tint(0.45);
+  vars["--lq-user-bubble"] = tint(dark ? 0.1 : 0.06);
+  vars["--lq-user-bubble-text"] = text;
+  vars["--lq-code-bg"] = tint(dark ? 0.05 : 0.035);
+  vars["--lq-text-subtle"] =
+    bg && mutedRgb ? mix(mutedRgb, bg, 0.8) : "color-mix(in srgb, var(--lq-text-muted) 80%, var(--lq-bg))";
+
+  // interim: removed in Task 6 with styles.css (old names of the derived palette).
+  legacy["--lq-text"] = text;
+  legacy["--lq-muted"] = muted;
+  legacy["--lq-surface"] = vars["--lq-surface"];
+  legacy["--lq-elevated"] = vars["--lq-surface-raised"];
+
+  return { vars, legacy, custom: [...PALETTE_KEYS], scheme: bg ? (dark ? "dark" : "light") : null };
 }
 
-/** Apply `config.theme` to `el` (default <html>) and return what was resolved. */
-export function applyTheme(theme: Record<string, string> | null | undefined, el: HTMLElement = document.documentElement): ResolvedTheme {
-  const resolved = resolveTheme(theme);
-  for (const name of [...THEME_KEYS.map((k) => `--lq-${k}`), ...DERIVED_VARS]) {
-    const v = resolved.vars[name];
-    if (v) el.style.setProperty(name, v);
-    else el.style.removeProperty(name);
-  }
+/** The scheme the page shows: a brand background's (R25), else the theme's. */
+export function effectiveScheme(theme: ThemeId, brand: Record<string, string> | null | undefined): ColorMode {
+  return resolveTheme(brand).scheme ?? THEME_SCHEME[theme];
+}
+
+// ---------- appearance ----------
+
+const isThemeId = (v: unknown): v is ThemeId => typeof v === "string" && (THEMES as readonly string[]).includes(v);
+const isColorToken = (v: unknown): v is ColorToken => typeof v === "string" && (COLOR_TOKENS as readonly string[]).includes(v);
+
+/** interim: removed in Task 6 with styles.css. Old variable names only the legacy stylesheet reads. */
+const LEGACY_ONLY = ["--lq-background", "--lq-muted", "--lq-radius", "--lq-font", "--lq-on-accent", "--lq-elevated"];
+
+/** Every inline property applyAppearance owns; each call clears the ones it no longer sets. */
+const MANAGED = [...COLOR_TOKENS.map((t) => `--lq-${t}`), ...Object.keys(RADIUS_SCALE), "--lq-font-body", ...LEGACY_ONLY];
+
+export interface Appearance {
+  theme: ThemeId;
+  density?: Density;
+  text?: TextSize;
+  /** The user's accent pref; ignored unless it parses as a color. */
+  accent?: string;
+}
+
+/**
+ * Apply the appearance to `el` (default <html>):
+ * 1. root attributes data-lq-theme, data-lq-scheme, data-lq-density and data-lq-text;
+ * 2. the legacy brand layer (`config.theme`), see resolveTheme;
+ * 3. the user's accent pref;
+ * 4. `lock_tokens` last, as !important inline properties: a locked token (and the tokens
+ *    derived from it) keeps the brand value, or the theme's when the brand doesn't set it.
+ * It also starts loading the theme's fonts (memoised, so repeat calls are free).
+ */
+export function applyAppearance(
+  a: Appearance,
+  brand: Record<string, string> | null,
+  el: HTMLElement = document.documentElement,
+  lock: readonly string[] = [],
+): void {
+  const theme = isThemeId(a.theme) ? a.theme : "graphite";
+  const resolved = resolveTheme(brand, THEME_SCHEME[theme]);
+
+  el.setAttribute("data-lq-theme", theme);
+  el.setAttribute("data-lq-scheme", resolved.scheme ?? THEME_SCHEME[theme]);
+  el.setAttribute("data-lq-density", a.density === "compact" ? "compact" : "comfortable");
+  el.setAttribute("data-lq-text", a.text === "s" || a.text === "l" ? a.text : "m");
   if (resolved.custom.length) el.setAttribute(CUSTOM_ATTR, resolved.custom.join(" "));
   else el.removeAttribute(CUSTOM_ATTR);
-  return resolved;
-}
 
-// ---------- color mode ----------
+  const out: Record<string, string> = { ...resolved.vars };
+  const userAccent = a.accent?.trim();
+  if (userAccent && resolveColor(userAccent)) Object.assign(out, accentFamily(userAccent));
 
-export function readStoredMode(): ColorMode | null {
-  try {
-    const v = localStorage.getItem(MODE_KEY);
-    return v === "light" || v === "dark" ? v : null;
-  } catch {
-    return null;
+  const locked = new Set<string>();
+  for (const token of lock) {
+    if (!isColorToken(token)) continue;
+    for (const t of [token, ...(LOCK_DERIVED[token] ?? [])]) {
+      const name = `--lq-${t}`;
+      locked.add(name);
+      out[name] = resolved.vars[name] ?? THEME_TOKENS[theme][t];
+    }
   }
+
+  // interim: removed in Task 6 with styles.css. The legacy stylesheet reads the old names.
+  for (const name of LEGACY_ONLY) {
+    const v = resolved.legacy[name];
+    if (v) out[name] = v;
+  }
+  if (out["--lq-accent-text"]) out["--lq-on-accent"] = out["--lq-accent-text"];
+
+  for (const name of MANAGED) el.style.removeProperty(name);
+  for (const [name, v] of Object.entries(out)) el.style.setProperty(name, v, locked.has(name) ? "important" : "");
+
+  loadThemeFonts(theme).catch(() => {
+    /* a font that fails to load falls back to the theme's system stack */
+  });
 }
 
-export function storeMode(mode: ColorMode) {
-  try {
-    localStorage.setItem(MODE_KEY, mode);
-  } catch {
-    /* storage unavailable: the choice lasts for this page only */
-  }
+// ---------- theme selection ----------
+
+export interface ThemeConfig {
+  default_theme?: ThemePref | string;
+  themes?: readonly (ThemeId | string)[];
 }
+
+/** The allowed themes, in configured order; all four when the list is missing or holds no known id. */
+export function allowedThemes(themes: ThemeConfig["themes"]): ThemeId[] {
+  const known = (themes ?? []).filter(isThemeId);
+  return known.length ? [...new Set(known)] : [...THEMES];
+}
+
+/** "system": the light/dark pair among the allowed themes (graphite/midnight by default). */
+function systemTheme(allowed: readonly ThemeId[], dark: boolean): ThemeId {
+  const pick = (scheme: ColorMode, preferred: ThemeId) => {
+    const of = allowed.filter((t) => THEME_SCHEME[t] === scheme);
+    return of.includes(preferred) ? preferred : of[0];
+  };
+  const light = pick("light", "graphite");
+  const darkTheme = pick("dark", "midnight");
+  return (dark ? (darkTheme ?? light) : (light ?? darkTheme)) ?? "graphite";
+}
+
+/**
+ * The effective theme. A pref outside the allowed themes falls back to `default_theme`
+ * silently; `system` (as pref or default) follows the OS scheme within the allowed themes.
+ */
+export function resolveThemeId(pref: ThemePref | undefined, cfg: ThemeConfig, systemDark: boolean): ThemeId {
+  const allowed = allowedThemes(cfg.themes);
+  const pick = (v: unknown) => (isThemeId(v) && allowed.includes(v) ? v : null);
+  if (pref === "system") return systemTheme(allowed, systemDark);
+  return pick(pref) ?? pick(cfg.default_theme) ?? systemTheme(allowed, systemDark);
+}
+
+// ---------- system scheme ----------
 
 function darkQuery(): MediaQueryList | null {
   try {
@@ -183,29 +334,19 @@ function darkQuery(): MediaQueryList | null {
   }
 }
 
-export function systemMode(): ColorMode {
-  return darkQuery()?.matches ? "dark" : "light";
+export function systemDark(): boolean {
+  return !!darkQuery()?.matches;
 }
 
-/** The effective color mode: the stored choice if any, else the system preference (tracked live). */
-export function useColorMode(): [ColorMode, () => void] {
-  const [stored, setStored] = useState<ColorMode | null>(readStoredMode);
-  const [system, setSystem] = useState<ColorMode>(systemMode);
-
+/** The OS dark-mode preference, tracked live. */
+export function useSystemDark(): boolean {
+  const [dark, setDark] = useState<boolean>(systemDark);
   useEffect(() => {
     const q = darkQuery();
     if (!q || typeof q.addEventListener !== "function") return;
-    const onChange = () => setSystem(q.matches ? "dark" : "light");
+    const onChange = () => setDark(q.matches);
     q.addEventListener("change", onChange);
     return () => q.removeEventListener("change", onChange);
   }, []);
-
-  const mode = stored ?? system;
-  const toggle = useCallback(() => {
-    const next: ColorMode = mode === "dark" ? "light" : "dark";
-    storeMode(next);
-    setStored(next);
-  }, [mode]);
-
-  return [mode, toggle];
+  return dark;
 }

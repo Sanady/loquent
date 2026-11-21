@@ -7,7 +7,8 @@ import { MessageList } from "./components/MessageList";
 import { ThreadList } from "./components/ThreadList";
 import { appStore, type AppStore } from "./state/store";
 import { StoreProvider, useApp, useAppStore } from "./storeContext";
-import { applyTheme, useColorMode, type ColorMode } from "./theme";
+import { allowedThemes, applyAppearance, effectiveScheme, resolveThemeId, useSystemDark, type ThemePref } from "./theme";
+import type { ThemeId } from "./themes";
 
 const NAV_ID = "lq-nav";
 const NARROW = "(max-width: 720px)";
@@ -57,7 +58,7 @@ function Notice() {
   );
 }
 
-function Chat({ mode, onToggleMode }: { mode: ColorMode; onToggleMode: (() => void) | null }) {
+function Chat({ theme, onCycleTheme }: { theme: ThemeId; onCycleTheme: (() => void) | null }) {
   const store = useAppStore();
   const showThreads = useApp((s) => !(s.config?.hide ?? []).includes("thread_list"));
   const items = useApp((s) => s.view.items);
@@ -156,8 +157,8 @@ function Chat({ mode, onToggleMode }: { mode: ColorMode; onToggleMode: (() => vo
           navId={showThreads ? NAV_ID : null}
           navOpen={navOpen}
           onToggleNav={() => (narrow ? setDrawerOpen((o) => !o) : setCollapsed((c) => !c))}
-          mode={mode}
-          onToggleMode={onToggleMode}
+          theme={theme}
+          onCycleTheme={onCycleTheme}
         />
         <Notice />
         <main className="lq-conversation" ref={scroller} onScroll={onScroll}>
@@ -185,7 +186,9 @@ function Shell() {
   const config = useApp((s) => s.config);
   const needsLogin = useApp((s) => s.config?.auth === "password" && s.user === null);
   const [loaded, setLoaded] = useState(false);
-  const [mode, toggleMode] = useColorMode();
+  // The theme choice lasts for this page only until Task 9/10 add stored prefs.
+  const [pref, setPref] = useState<ThemePref | undefined>(undefined);
+  const dark = useSystemDark();
 
   const load = useCallback(() => {
     setLoaded(false);
@@ -196,10 +199,16 @@ function Shell() {
   }, [store]);
 
   useEffect(load, [load]);
-  // A configured brand background fixes the palette and its scheme in both modes (R25).
-  const [brandScheme, setBrandScheme] = useState<ColorMode | null>(null);
-  useLayoutEffect(() => setBrandScheme(applyTheme(config?.theme).scheme), [config?.theme]);
-  const effectiveMode = brandScheme ?? mode;
+
+  const themes = allowedThemes(config?.themes);
+  const theme = resolveThemeId(pref, { default_theme: config?.default_theme, themes }, dark);
+  const brand = config?.theme ?? null;
+  const locks = config?.lock_tokens;
+  useLayoutEffect(() => applyAppearance({ theme }, brand, document.documentElement, locks ?? []), [theme, brand, locks]);
+  const cycleTheme = useCallback(() => setPref(themes[(themes.indexOf(theme) + 1) % themes.length]), [themes, theme]);
+  // interim: removed in Task 6 with styles.css. The legacy stylesheet's dark mode keys off
+  // .lq-root[data-mode]; a configured brand background fixes the scheme in every theme (R25).
+  const legacyMode = effectiveScheme(theme, brand);
   useEffect(() => {
     if (config?.app_name) document.title = config.app_name;
   }, [config?.app_name]);
@@ -220,11 +229,11 @@ function Shell() {
   } else if (needsLogin) {
     body = <Login />;
   } else {
-    body = <Chat mode={effectiveMode} onToggleMode={brandScheme ? null : toggleMode} />;
+    body = <Chat theme={theme} onCycleTheme={themes.length > 1 ? cycleTheme : null} />;
   }
 
   return (
-    <div className="lq-root" data-mode={effectiveMode}>
+    <div className="lq-root" data-mode={legacyMode}>
       {body}
     </div>
   );

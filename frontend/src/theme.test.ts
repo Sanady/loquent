@@ -1,13 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { loadThemeFonts } from "./fonts";
 import css from "./styles.css?raw";
-import { applyTheme, contrast, CUSTOM_ATTR, parseColor, readStoredMode, resolveTheme, storeMode, systemMode } from "./theme";
+import { applyAppearance, contrast, CUSTOM_ATTR, effectiveScheme, parseColor, resolveTheme, resolveThemeId, systemDark } from "./theme";
+import { THEME_TOKENS, THEMES, type ThemeId } from "./themes";
+
+vi.mock("./fonts", () => ({ loadThemeFonts: vi.fn(async () => {}) }));
 
 afterEach(() => vi.restoreAllMocks());
+
+/** applyAppearance with the legacy `config.theme` only (the brand layer), in a light theme. */
+const applyBrand = (brand: Record<string, string>, el?: HTMLElement, theme: ThemeId = "graphite") => applyAppearance({ theme }, brand, el);
 
 describe("theme", () => {
   it("theme tokens applied as css vars", () => {
     const el = document.documentElement;
-    applyTheme(
+    applyBrand(
       {
         accent: "#ff0066",
         background: "#101010",
@@ -20,43 +27,26 @@ describe("theme", () => {
       el,
     );
     expect(el.style.getPropertyValue("--lq-accent")).toBe("#ff0066");
-    expect(el.style.getPropertyValue("--lq-background")).toBe("#101010");
+    expect(el.style.getPropertyValue("--lq-bg")).toBe("#101010");
     expect(el.style.getPropertyValue("--lq-surface")).toBe("#202020");
     expect(el.style.getPropertyValue("--lq-text")).toBe("#eeeeee");
-    expect(el.style.getPropertyValue("--lq-muted")).toBe("#999999");
-    expect(el.style.getPropertyValue("--lq-radius")).toBe("4px");
-    expect(el.style.getPropertyValue("--lq-font")).toBe("Georgia, serif");
+    expect(el.style.getPropertyValue("--lq-text-muted")).toBe("#999999");
+    expect(el.style.getPropertyValue("--lq-radius-lg")).toBe("4px");
+    expect(el.style.getPropertyValue("--lq-font-body")).toBe("Georgia, serif");
   });
 
   it("ignores unknown keys and clears keys that are no longer set", () => {
     const el = document.documentElement;
-    applyTheme({ accent: "red", evil: "x" }, el);
+    applyBrand({ accent: "red", evil: "x" }, el);
     expect(el.style.getPropertyValue("--lq-evil")).toBe("");
-    applyTheme({}, el);
+    applyBrand({}, el);
     expect(el.style.getPropertyValue("--lq-accent")).toBe("");
-  });
-
-  it("stored mode round-trips and survives a throwing localStorage", () => {
-    expect(readStoredMode()).toBeNull();
-    storeMode("dark");
-    expect(readStoredMode()).toBe("dark");
-    localStorage.setItem("lq-color-mode", "purple");
-    expect(readStoredMode()).toBeNull();
-
-    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-      throw new Error("denied");
-    });
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-      throw new Error("denied");
-    });
-    expect(readStoredMode()).toBeNull();
-    expect(() => storeMode("light")).not.toThrow();
   });
 
   it("system mode follows prefers-color-scheme", () => {
     const mm = vi.fn((q: string) => ({ matches: q.includes("dark") }) as MediaQueryList);
     vi.stubGlobal("matchMedia", mm);
-    expect(systemMode()).toBe("dark");
+    expect(systemDark()).toBe(true);
     vi.unstubAllGlobals();
   });
 });
@@ -74,13 +64,13 @@ describe("brand palettes (R25) and derived contrast", () => {
     const v = r.vars;
     expect(r.scheme).toBe("dark");
     expect(r.custom).toEqual(["background", "surface", "text", "muted"]);
-    expect(v["--lq-on-accent"]).toBe("#111111");
-    expect(contrast(rgb(v["--lq-on-accent"]), rgb("#7dd3fc"))).toBeGreaterThanOrEqual(AA);
+    expect(v["--lq-accent-text"]).toBe("#111111");
+    expect(contrast(rgb(v["--lq-accent-text"]), rgb("#7dd3fc"))).toBeGreaterThanOrEqual(AA);
     // The elevated surface (buttons, chips, composer, widgets) is derived, never white.
-    expect(v["--lq-elevated"]).not.toMatch(/^#fff/i);
-    expect(contrast(rgb("#eeeeee"), rgb(v["--lq-elevated"]))).toBeGreaterThanOrEqual(AA);
+    expect(v["--lq-surface-raised"]).not.toMatch(/^#fff/i);
+    expect(contrast(rgb("#eeeeee"), rgb(v["--lq-surface-raised"]))).toBeGreaterThanOrEqual(AA);
     expect(contrast(rgb("#eeeeee"), rgb(v["--lq-surface"]))).toBeGreaterThanOrEqual(AA);
-    expect(contrast(rgb(v["--lq-muted"]), rgb(v["--lq-elevated"]))).toBeGreaterThanOrEqual(AA);
+    expect(contrast(rgb(v["--lq-text-muted"]), rgb(v["--lq-surface-raised"]))).toBeGreaterThanOrEqual(AA);
   });
 
   it("a background alone derives readable text, muted and surface", () => {
@@ -89,34 +79,39 @@ describe("brand palettes (R25) and derived contrast", () => {
       const b = rgb(bg);
       expect(contrast(rgb(v["--lq-text"]), b)).toBeGreaterThanOrEqual(AA);
       expect(contrast(rgb(v["--lq-text"]), rgb(v["--lq-surface"]))).toBeGreaterThanOrEqual(AA);
-      expect(contrast(rgb(v["--lq-text"]), rgb(v["--lq-elevated"]))).toBeGreaterThanOrEqual(AA);
-      expect(contrast(rgb(v["--lq-muted"]), b)).toBeGreaterThanOrEqual(AA);
+      expect(contrast(rgb(v["--lq-text"]), rgb(v["--lq-surface-raised"]))).toBeGreaterThanOrEqual(AA);
+      expect(contrast(rgb(v["--lq-text-muted"]), b)).toBeGreaterThanOrEqual(AA);
+      // New derived roles stay readable too.
+      expect(contrast(rgb(v["--lq-user-bubble-text"]), rgb(v["--lq-user-bubble"]))).toBeGreaterThanOrEqual(AA);
+      expect(contrast(rgb(v["--lq-text"]), rgb(v["--lq-bg-subtle"]))).toBeGreaterThanOrEqual(AA);
+      expect(contrast(rgb(v["--lq-text"]), rgb(v["--lq-code-bg"]))).toBeGreaterThanOrEqual(AA);
+      expect(contrast(rgb(v["--lq-text-muted"]), rgb(v["--lq-surface"]))).toBeGreaterThanOrEqual(AA);
     }
   });
 
   it("on-accent is white on dark accents and near-black on light ones", () => {
-    expect(resolveTheme({ accent: "#1e3a8a" }).vars["--lq-on-accent"]).toBe("#ffffff");
-    expect(resolveTheme({ accent: "#facc15" }).vars["--lq-on-accent"]).toBe("#111111");
-    expect(resolveTheme({ accent: "#fc0" }).vars["--lq-on-accent"]).toBe("#111111");
-    expect(resolveTheme({}).vars["--lq-on-accent"]).toBeUndefined();
+    expect(resolveTheme({ accent: "#1e3a8a" }).vars["--lq-accent-text"]).toBe("#ffffff");
+    expect(resolveTheme({ accent: "#facc15" }).vars["--lq-accent-text"]).toBe("#111111");
+    expect(resolveTheme({ accent: "#fc0" }).vars["--lq-accent-text"]).toBe("#111111");
+    expect(resolveTheme({}).vars["--lq-accent-text"]).toBeUndefined();
   });
 
   it("without a background, configured colors are not marked custom", () => {
     const r = resolveTheme({ text: "#222222", accent: "#f00" });
     expect(r.custom).toEqual([]);
     expect(r.scheme).toBeNull();
-    expect(r.vars["--lq-elevated"]).toBeUndefined();
+    expect(r.vars["--lq-surface-raised"]).toBeUndefined();
   });
 
-  it("applyTheme marks custom keys on <html> and clears derived vars when the config changes", () => {
+  it("applyAppearance marks custom keys on <html> and clears derived vars when the config changes", () => {
     const el = document.documentElement;
-    applyTheme({ background: "#111", accent: "#7dd3fc" }, el);
+    applyBrand({ background: "#111", accent: "#7dd3fc" }, el);
     expect(el.getAttribute(CUSTOM_ATTR)).toBe("background surface text muted");
-    expect(el.style.getPropertyValue("--lq-elevated")).not.toBe("");
-    applyTheme({}, el);
+    expect(el.style.getPropertyValue("--lq-surface-raised")).not.toBe("");
+    applyBrand({}, el);
     expect(el.hasAttribute(CUSTOM_ATTR)).toBe(false);
-    expect(el.style.getPropertyValue("--lq-elevated")).toBe("");
-    expect(el.style.getPropertyValue("--lq-on-accent")).toBe("");
+    expect(el.style.getPropertyValue("--lq-surface-raised")).toBe("");
+    expect(el.style.getPropertyValue("--lq-accent-text")).toBe("");
   });
 });
 
@@ -136,7 +131,8 @@ describe("styles.css cascade", () => {
   const darkConfig = { accent: "#7dd3fc", background: "#111111", text: "#eeeeee" };
 
   it("configured colors persist in dark mode", () => {
-    const resolved = applyTheme(darkConfig);
+    applyBrand(darkConfig, undefined, "midnight");
+    const resolved = { vars: resolveTheme(darkConfig).legacy };
     const { get, done } = mount("dark");
     try {
       expect(get("--lq-background")).toBe("#111111");
@@ -151,7 +147,8 @@ describe("styles.css cascade", () => {
   });
 
   it("a dark config in light mode gets no white elevated surface", () => {
-    const resolved = applyTheme(darkConfig);
+    applyBrand(darkConfig);
+    const resolved = { vars: resolveTheme(darkConfig).legacy };
     const { get, done } = mount("light");
     try {
       expect(get("--lq-elevated")).toBe(resolved.vars["--lq-elevated"]);
@@ -162,7 +159,7 @@ describe("styles.css cascade", () => {
   });
 
   it("without a configured background the built-in dark palette applies", () => {
-    applyTheme({ text: "#222222" });
+    applyBrand({ text: "#222222" }, undefined, "midnight");
     const { get, done } = mount("dark");
     try {
       expect(get("--lq-background")).toBe("#141513");
@@ -174,7 +171,7 @@ describe("styles.css cascade", () => {
   });
 
   it("defaults: white elevated and on-accent in light mode", () => {
-    applyTheme({});
+    applyBrand({});
     const { get, done } = mount("light");
     try {
       expect(get("--lq-elevated")).toBe("#ffffff");
@@ -182,5 +179,137 @@ describe("styles.css cascade", () => {
     } finally {
       done();
     }
+  });
+});
+
+describe("theme selection", () => {
+  const all = { default_theme: "system" as const, themes: [...THEMES] };
+
+  it("system maps to graphite in light and midnight in dark", () => {
+    expect(resolveThemeId(undefined, all, false)).toBe("graphite");
+    expect(resolveThemeId(undefined, all, true)).toBe("midnight");
+    expect(resolveThemeId("system", all, true)).toBe("midnight");
+    // The pair is taken among the allowed themes.
+    const pair = { default_theme: "system" as const, themes: ["editorial", "graphite-dark"] as ThemeId[] };
+    expect(resolveThemeId("system", pair, false)).toBe("editorial");
+    expect(resolveThemeId("system", pair, true)).toBe("graphite-dark");
+  });
+
+  it("system with only light themes stays light", () => {
+    const light = { default_theme: "system" as const, themes: ["graphite", "editorial"] as ThemeId[] };
+    expect(resolveThemeId("system", light, true)).toBe("graphite");
+    const dark = { default_theme: "system" as const, themes: ["midnight"] as ThemeId[] };
+    expect(resolveThemeId("system", dark, false)).toBe("midnight");
+  });
+
+  it("an explicit pref or default theme wins over the system scheme", () => {
+    expect(resolveThemeId("editorial", all, true)).toBe("editorial");
+    expect(resolveThemeId(undefined, { default_theme: "graphite-dark", themes: [...THEMES] }, false)).toBe("graphite-dark");
+  });
+
+  it("a pref not in allowed themes falls back to default", () => {
+    const cfg = { default_theme: "editorial" as const, themes: ["editorial", "midnight"] as ThemeId[] };
+    expect(resolveThemeId("graphite", cfg, true)).toBe("editorial");
+    expect(resolveThemeId("nonsense" as ThemeId, cfg, true)).toBe("editorial");
+    // ... and to the system pair when the default is "system".
+    expect(resolveThemeId("graphite", { default_theme: "system", themes: ["editorial", "midnight"] }, true)).toBe("midnight");
+  });
+});
+
+describe("applyAppearance", () => {
+  const el = () => document.documentElement;
+  const v = (name: string) => el().style.getPropertyValue(name);
+
+  it("sets the root attributes and loads the theme's fonts", () => {
+    vi.mocked(loadThemeFonts).mockClear();
+    applyAppearance({ theme: "midnight" }, null);
+    expect(el().getAttribute("data-lq-theme")).toBe("midnight");
+    expect(el().getAttribute("data-lq-scheme")).toBe("dark");
+    expect(el().getAttribute("data-lq-density")).toBe("comfortable");
+    expect(el().getAttribute("data-lq-text")).toBe("m");
+    expect(loadThemeFonts).toHaveBeenCalledWith("midnight");
+    applyAppearance({ theme: "editorial", density: "compact", text: "l" }, null);
+    expect(el().getAttribute("data-lq-theme")).toBe("editorial");
+    expect(el().getAttribute("data-lq-scheme")).toBe("light");
+    expect(el().getAttribute("data-lq-density")).toBe("compact");
+    expect(el().getAttribute("data-lq-text")).toBe("l");
+    expect(loadThemeFonts).toHaveBeenLastCalledWith("editorial");
+  });
+
+  it("legacy accent applies in every theme", () => {
+    for (const theme of THEMES) {
+      applyAppearance({ theme }, { accent: "#e11d48" });
+      expect(v("--lq-accent")).toBe("#e11d48");
+      expect(v("--lq-accent-text")).toBe("#ffffff");
+      expect(v("--lq-accent-hover")).toContain("#e11d48");
+      expect(v("--lq-accent-soft")).toContain("#e11d48");
+    }
+  });
+
+  it("legacy colors without a background apply to light themes only", () => {
+    applyAppearance({ theme: "editorial" }, { text: "#222222", surface: "#fafafa" });
+    expect(v("--lq-text")).toBe("#222222");
+    expect(v("--lq-surface")).toBe("#fafafa");
+    expect(el().getAttribute("data-lq-scheme")).toBe("light");
+    applyAppearance({ theme: "midnight" }, { text: "#222222", surface: "#fafafa", radius: "4px" });
+    expect(v("--lq-text")).toBe("");
+    expect(v("--lq-surface")).toBe("");
+    expect(v("--lq-radius-lg")).toBe("4px"); // non-color keys apply everywhere
+    expect(el().getAttribute("data-lq-scheme")).toBe("dark");
+  });
+
+  it("legacy background keeps brand colors in dark themes (R25)", () => {
+    const brand = { background: "#fdf6e3", accent: "#0a7d5a" };
+    const resolved = resolveTheme(brand);
+    for (const theme of ["midnight", "graphite-dark", "graphite"] as ThemeId[]) {
+      applyAppearance({ theme }, brand);
+      expect(v("--lq-bg")).toBe("#fdf6e3");
+      for (const name of ["--lq-text", "--lq-text-muted", "--lq-surface", "--lq-surface-raised", "--lq-bg-subtle", "--lq-border", "--lq-user-bubble"]) {
+        expect(v(name), `${name} in ${theme}`).toBe(resolved.vars[name]);
+      }
+      expect(el().getAttribute(CUSTOM_ATTR)).toBe("background surface text muted");
+      // The brand palette fixes the scheme: a light brand background reads as light.
+      expect(el().getAttribute("data-lq-scheme")).toBe("light");
+      expect(effectiveScheme(theme, brand)).toBe("light");
+    }
+    expect(effectiveScheme("graphite", { background: "#111111" })).toBe("dark");
+    expect(effectiveScheme("midnight", { text: "#222" })).toBe("dark");
+  });
+
+  it("a user accent applies over the brand accent", () => {
+    applyAppearance({ theme: "graphite", accent: "#facc15" }, { accent: "#1e3a8a" });
+    expect(v("--lq-accent")).toBe("#facc15");
+    expect(v("--lq-accent-text")).toBe("#111111");
+    expect(v("--lq-accent-hover")).toContain("#facc15");
+    // interim: the legacy stylesheet's on-accent follows the effective accent.
+    expect(v("--lq-on-accent")).toBe("#111111");
+  });
+
+  it("locked accent overrides user accent and its derived tokens", () => {
+    applyAppearance({ theme: "graphite", accent: "#facc15" }, { accent: "#1e3a8a" }, undefined, ["accent"]);
+    expect(v("--lq-accent")).toBe("#1e3a8a");
+    expect(v("--lq-accent-text")).toBe("#ffffff");
+    expect(v("--lq-accent-hover")).toContain("#1e3a8a");
+    expect(v("--lq-accent-soft")).toContain("#1e3a8a");
+    expect(el().style.getPropertyPriority("--lq-accent")).toBe("important");
+    expect(el().style.getPropertyPriority("--lq-accent-hover")).toBe("important");
+
+    // Without a brand accent the theme's own accent family is locked.
+    applyAppearance({ theme: "midnight", accent: "#facc15" }, null, undefined, ["accent"]);
+    for (const t of ["accent", "accent-hover", "accent-soft", "accent-text"] as const) {
+      expect(v(`--lq-${t}`)).toBe(THEME_TOKENS.midnight[t]);
+    }
+
+    // Unlocking clears the inline values.
+    applyAppearance({ theme: "midnight" }, null);
+    expect(v("--lq-accent")).toBe("");
+    expect(el().style.getPropertyPriority("--lq-accent")).toBe("");
+  });
+
+  it("does not use the old lq-color-mode key", () => {
+    localStorage.setItem("lq-color-mode", "dark");
+    applyAppearance({ theme: "graphite" }, null);
+    expect(el().getAttribute("data-lq-scheme")).toBe("light");
+    localStorage.clear();
   });
 });

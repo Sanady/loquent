@@ -17,6 +17,14 @@ export const THEME_SCHEME: Record<ThemeId, "light" | "dark"> = {
   midnight: "dark",
 };
 
+/** Display names, for the theme picker and accessible labels. */
+export const THEME_LABEL: Record<ThemeId, string> = {
+  graphite: "Graphite",
+  "graphite-dark": "Graphite Dark",
+  editorial: "Editorial",
+  midnight: "Midnight",
+};
+
 /** Color roles; each is the `--lq-<name>` custom property a theme sets. */
 export const COLOR_TOKENS = [
   "bg",

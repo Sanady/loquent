@@ -39,6 +39,12 @@ def routes(deps: Deps) -> list[Route]:
                 and deps.file_store is not None,
                 "max_upload_mb": s.max_upload_mb,
                 "allowed_upload_types": list(s.allowed_upload_types),
+                "default_theme": s.default_theme,
+                "themes": list(s.themes),
+                "allow_user_css": s.allow_user_css,
+                "allow_user_prefs": s.allow_user_prefs,
+                "lock_tokens": list(s.lock_tokens),
+                "max_user_css_kb": s.max_user_css_kb,
             }
         )
 

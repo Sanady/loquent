@@ -487,13 +487,21 @@ export LOQUENT_THEME='{"accent": "#0a7d5a", "radius": "6px"}'
 export LOQUENT_HIDE='["thread_list"]'
 ```
 
+- **Themes:** the UI ships four themes: `graphite`, `graphite-dark`, `editorial` and
+  `midnight`. `themes` lists the ones users may pick, and `default_theme` picks the
+  starting one. The default, `system`, follows the device's light/dark setting within
+  `themes` (`graphite` and `midnight` by default).
 - **`theme`** keys: `accent`, `background`, `surface`, `text`, `muted`, `radius` and `font`.
-  Each one sets the CSS variable `--lq-<key>`. Text on the accent color is black or white,
-  whichever contrasts more.
-- **Dark mode:** your colors carry into dark mode only when you set `background`. Then the
-  palette is yours: any missing `text`, `muted` and `surface` are derived from the
-  background for contrast, and the light/dark toggle is hidden. Without `background`, your
-  colors adjust light mode only, and dark mode uses the built-in dark palette.
+  They are a brand layer on top of the active theme, setting the CSS variables
+  `--lq-accent`, `--lq-bg`, `--lq-surface`, `--lq-text`, `--lq-text-muted`, the
+  `--lq-radius-*` scale and `--lq-font-body`. Text on the accent color is black or white,
+  whichever contrasts more. `accent` applies in every theme.
+- **Dark themes:** your other colors carry into dark themes only when you set
+  `background`. Then the palette is yours in every theme: any missing `text`, `muted` and
+  `surface` are derived from the background for contrast. Without `background`, those
+  colors adjust light themes only, and dark themes keep their own palette.
+- **`lock_tokens`**: color tokens users may not change, such as `["accent"]` to keep the
+  brand color. Locking `accent` also locks `accent-hover`, `accent-soft` and `accent-text`.
 - **`logo_path`**: an image file shown in the header (served at `branding/logo`).
 - **`custom_css_path`**: a stylesheet served at `branding/custom.css` and loaded after the
   built-in styles, so it can override anything. The UI's classes start with `lq-`.
@@ -531,6 +539,12 @@ environment variables are JSON, for example `LOQUENT_CORS_ORIGINS='["https://app
 | `theme` | `LOQUENT_THEME` |  | `{}` | Design tokens; see [Theming and branding](#theming-and-branding). |
 | `custom_css_path` | `LOQUENT_CUSTOM_CSS_PATH` |  | unset | Stylesheet loaded after the built-in styles. |
 | `hide` | `LOQUENT_HIDE` |  | `[]` | UI parts to hide. Supported: `thread_list`. |
+| `default_theme` | `LOQUENT_DEFAULT_THEME` |  | `system` | Starting theme: `graphite`, `graphite-dark`, `editorial`, `midnight`, or `system` (follows the device's light/dark setting). Must be in `themes` unless `system`. |
+| `themes` | `LOQUENT_THEMES` |  | all four | Themes users may pick, in display order. At least one. |
+| `allow_user_css` | `LOQUENT_ALLOW_USER_CSS` |  | `true` | Let chat users add their own CSS. |
+| `allow_user_prefs` | `LOQUENT_ALLOW_USER_PREFS` |  | `true` | Let chat users change their appearance (theme, density, text size, accent). |
+| `lock_tokens` | `LOQUENT_LOCK_TOKENS` |  | `[]` | Color tokens users may not change, such as `["accent"]`. |
+| `max_user_css_kb` | `LOQUENT_MAX_USER_CSS_KB` |  | `64` | Largest user stylesheet, in KB. |
 | `forward_headers` | `LOQUENT_FORWARD_HEADERS` |  | `[]` | Request headers passed to the agent in `ctx.forwarded_props["headers"]`. `Cookie`, `Authorization` and `X-Loquent-CSRF` are never forwarded. |
 | `widgets` | `LOQUENT_WIDGETS` | `--no-widgets` | `true` | Offer the widget tools to the agent. Turn off for backends that reject tools. |
 | `model` | `LOQUENT_MODEL` | `--model` | unset | With a URL target: the model name, which selects the OpenAI-compatible adapter. |
