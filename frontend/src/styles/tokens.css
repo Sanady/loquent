@@ -56,6 +56,7 @@
     --lq-sidebar-width: 264px;
   }
 
+  /* Compact deliberately breaks the 4px base (3px, 6px at space-1/2) to tighten small gaps. */
   [data-lq-density="compact"] {
     --lq-space-1: 3px;
     --lq-space-2: 6px;

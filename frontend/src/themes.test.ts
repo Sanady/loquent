@@ -50,6 +50,22 @@ const AA_PAIRS: [fg: ColorToken, bg: ColorToken, min: number][] = [
   ["user-bubble-text", "user-bubble", 4.5],
   ["border-strong", "bg", 3],
   ["focus-ring", "bg", 3],
+  // Surfaces the real UI puts muted and body text on.
+  ["text-muted", "bg-subtle", 4.5],
+  ["text-muted", "user-bubble", 4.5],
+  ["text-muted", "code-bg", 4.5],
+  ["text", "code-bg", 4.5],
+  ["border-strong", "surface", 3],
+  // Status and accent colors are used as text and links on bg and on surface.
+  ...(["success", "warning", "danger", "accent"] as const).flatMap(
+    (fg): [ColorToken, ColorToken, number][] => [
+      [fg, "bg", 4.5],
+      [fg, "surface", 4.5],
+    ],
+  ),
+  // text-subtle is for non-essential text only (timestamps, hints), so 3:1 not 4.5:1.
+  ["text-subtle", "bg", 3],
+  ["text-subtle", "surface", 3],
 ];
 
 describe("themes", () => {
