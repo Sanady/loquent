@@ -47,6 +47,28 @@ uv run ruff format --check .
 - Only squash merges are enabled.
 - Add or update tests with your change, and run the suites above.
 
+## Maintainers
+
+### Bumping `googleapis/release-please-action`
+
+Dependabot opens these bumps in their own PR. The `release-config` CI job fails until
+`ACTION_BUNDLES` in `scripts/release_please_pin.mjs` has a row for the new version.
+
+1. Find the release-please version the new action bundles: open that tag's `package-lock.json` /
+   `package.json` in `googleapis/release-please-action` and read the `release-please` dependency
+   (the same file lists `jsonpath-plus` and `@iarna/toml`).
+2. Add the row to `ACTION_BUNDLES`.
+3. Push the row to the Dependabot branch.
+
+### Releasing
+
+1. Merging the release PR creates the tag and the GitHub Release.
+2. Approve the `pypi` deployment.
+3. Right after the first 0.1.0 release, merge `chore: drop release-as` (remove
+   `"release-as": "0.1.0"` from `release-please-config.json`) **before any `feat` or `fix` PR**,
+   or release-please re-proposes 0.1.0.
+4. Keep immutable releases off: `attach-assets` uploads after publish.
+
 ## Ignoring formatting-only commits in `git blame`
 
 ```bash

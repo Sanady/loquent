@@ -47,3 +47,7 @@ updates:
         update-types:
           - minor
           - patch
+        # release-please-action needs a matching row in scripts/release_please_pin.mjs,
+        # so its bumps arrive alone. See "Maintainers" in CONTRIBUTING.md.
+        exclude-patterns:
+          - "googleapis/release-please-action"
