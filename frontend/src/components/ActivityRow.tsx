@@ -1,4 +1,5 @@
 import { useId, useState, type ReactNode } from "react";
+import { part } from "../parts";
 import type { Item } from "../state/reducer";
 import { IconCheck, IconChevron, IconTool, Spinner } from "./icons";
 
@@ -30,8 +31,18 @@ function Row({
   const [open, setOpen] = useState(false);
   const id = useId();
   return (
-    <div className={`lq-activity lq-activity-${kind}${open ? " is-open" : ""}`}>
-      <button type="button" className="lq-activity-head" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>
+    <div
+      className={`lq-activity lq-activity-${kind}${open ? " is-open" : ""}`}
+      {...part("activity", { state: running ? "running" : "done" })}
+    >
+      <button
+        type="button"
+        className="lq-activity-head"
+        {...part(kind === "tool" ? "activity-tool" : "activity-step")}
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen((o) => !o)}
+      >
         <span className="lq-activity-chevron">
           <IconChevron />
         </span>

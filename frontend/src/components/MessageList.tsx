@@ -1,3 +1,4 @@
+import { part } from "../parts";
 import type { Item } from "../state/reducer";
 import { useApp } from "../storeContext";
 import { renderWidget } from "../widgets/registry";
@@ -15,7 +16,7 @@ function lastAssistantIndex(items: Item[]): number {
 
 function ErrorItem({ item }: { item: Extract<Item, { kind: "error" }> }) {
   return (
-    <div className="lq-error">
+    <div className="lq-error" {...part("error", { state: "error" })}>
       <IconAlert />
       <span>{item.message}</span>
     </div>
@@ -25,7 +26,7 @@ function ErrorItem({ item }: { item: Extract<Item, { kind: "error" }> }) {
 function EmptyState() {
   const logo = useApp((s) => s.config?.logo_url ?? null);
   return (
-    <div className="lq-empty">
+    <div className="lq-empty" {...part("empty-state")}>
       {logo && <img className="lq-empty-logo" src={logo} alt="" />}
       <h1>How can I help?</h1>
       <p>Ask a question or describe what you need.</p>
@@ -79,7 +80,7 @@ export function MessageList() {
           case "tool":
             return <ToolRow key={`t-${it.id}`} item={it} />;
           case "widget":
-            return <div key={`w-${it.id}`} className="lq-widget-slot">{renderWidget(it, { interactive: i === lastPending })}</div>;
+            return <div key={`w-${it.id}`} className="lq-widget-slot" {...part("widget")}>{renderWidget(it, { interactive: i === lastPending })}</div>;
           case "error":
             return <ErrorItem key={`e-${i}`} item={it} />;
           default:
@@ -87,8 +88,10 @@ export function MessageList() {
         }
       })}
       {showTyping && (
-        <div className="lq-msg lq-msg-assistant">
-          <Typing />
+        <div className="lq-msg lq-msg-assistant" {...part("message", { role: "assistant", state: "streaming" })}>
+          <div {...part("message-assistant")}>
+            <Typing />
+          </div>
         </div>
       )}
       {!starting && (run === "failed" || run === "interrupted") && (

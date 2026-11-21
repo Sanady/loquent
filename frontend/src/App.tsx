@@ -5,6 +5,7 @@ import { IconArrowDown, IconX } from "./components/icons";
 import { Login } from "./components/Login";
 import { MessageList } from "./components/MessageList";
 import { ThreadList } from "./components/ThreadList";
+import { part } from "./parts";
 import { appStore, type AppStore } from "./state/store";
 import { StoreProvider, useApp, useAppStore } from "./storeContext";
 import { allowedThemes, applyAppearance, effectiveScheme, resolveThemeId, useSystemDark, type ThemePref } from "./theme";
@@ -142,7 +143,7 @@ function Chat({ theme, onCycleTheme }: { theme: ThemeId; onCycleTheme: (() => vo
   return (
     <div className={layout}>
       {showThreads && (
-        <div className="lq-nav-wrap" inert={!navOpen}>
+        <div className="lq-nav-wrap" inert={!navOpen} {...(narrow && drawerOpen ? part("drawer") : {})}>
           <ThreadList
             id={NAV_ID}
             onNavigate={() => narrow && setDrawerOpen(false)}
@@ -151,7 +152,7 @@ function Chat({ theme, onCycleTheme }: { theme: ThemeId; onCycleTheme: (() => vo
         </div>
       )}
       {showThreads && narrow && drawerOpen && <div className="lq-scrim" aria-hidden="true" onClick={() => setDrawerOpen(false)} />}
-      <div className="lq-main" inert={drawerModal}>
+      <div className="lq-main" inert={drawerModal} {...part("main")}>
         <Header
           toggleRef={toggleRef}
           navId={showThreads ? NAV_ID : null}
@@ -161,7 +162,7 @@ function Chat({ theme, onCycleTheme }: { theme: ThemeId; onCycleTheme: (() => vo
           onCycleTheme={onCycleTheme}
         />
         <Notice />
-        <main className="lq-conversation" ref={scroller} onScroll={onScroll}>
+        <main className="lq-conversation" {...part("conversation")} ref={scroller} onScroll={onScroll}>
           <div className="lq-column">
             <MessageList />
           </div>
@@ -233,7 +234,7 @@ function Shell() {
   }
 
   return (
-    <div className="lq-root" data-mode={legacyMode}>
+    <div className="lq-root" data-mode={legacyMode} {...part("app")}>
       {body}
     </div>
   );

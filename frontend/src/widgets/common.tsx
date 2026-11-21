@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { part, type PartName } from "../parts";
 import { useApp, useAppStore } from "../storeContext";
 import type { WidgetItem } from "./registry";
 
@@ -32,9 +33,15 @@ export function Pending() {
   );
 }
 
+const WIDGET_PART: Record<string, PartName> = {
+  confirm: "widget-confirm",
+  select: "widget-select",
+  form: "widget-form",
+};
+
 export function Shell({ widget, children }: { widget: string; children: ReactNode }) {
   return (
-    <div className="lq-widget" data-widget={widget}>
+    <div className="lq-widget" data-widget={widget} {...part(WIDGET_PART[widget] ?? "widget")}>
       {children}
     </div>
   );

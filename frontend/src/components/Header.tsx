@@ -1,4 +1,5 @@
 import type { Ref } from "react";
+import { part } from "../parts";
 import { useApp } from "../storeContext";
 import { THEME_LABEL, THEME_SCHEME, type ThemeId } from "../themes";
 import { IconLogout, IconMoon, IconPlus, IconSidebar, IconSun } from "./icons";
@@ -27,7 +28,7 @@ export function Header({
   const themeLabel = `Theme: ${THEME_LABEL[theme]}`;
 
   return (
-    <header className="lq-header">
+    <header className="lq-header" {...part("header")}>
       {navId && (
         <button
           ref={toggleRef}
@@ -42,11 +43,11 @@ export function Header({
           <IconSidebar />
         </button>
       )}
-      <div className="lq-brand">
+      <div className="lq-brand" {...part("header-title")}>
         {logo && <img src={logo} alt="" className="lq-logo" />}
         <span className="lq-brand-name">{appName}</span>
       </div>
-      <div className="lq-header-actions">
+      <div className="lq-header-actions" {...part("header-actions")}>
         {!navId && (
           <button type="button" className="lq-icon-btn" aria-label="New chat" title="New chat" onClick={newThread}>
             <IconPlus />

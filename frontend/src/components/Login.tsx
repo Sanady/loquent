@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { part } from "../parts";
 import { useApp } from "../storeContext";
 
 export function Login() {
@@ -22,7 +23,7 @@ export function Login() {
   };
 
   return (
-    <main className="lq-login">
+    <main className="lq-login" {...part("login")}>
       <form className="lq-login-card" onSubmit={onSubmit} aria-labelledby="lq-login-title">
         <div className="lq-login-brand">
           {logo && <img src={logo} alt="" className="lq-logo" />}

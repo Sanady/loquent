@@ -5,6 +5,7 @@ import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import type { Element, ElementContent } from "hast";
+import { part } from "../parts";
 import { CopyButton } from "./CopyButton";
 
 const SAFE_PROTOCOL = /^(https?|mailto)$/i;
@@ -54,7 +55,7 @@ const components: Components = {
   pre: ({ node, children }) => {
     const lang = codeLanguage(node);
     return (
-      <div className="lq-code">
+      <div className="lq-code" {...part("code-block")}>
         <div className="lq-code-bar">
           <span className="lq-code-lang">{lang ?? "text"}</span>
           <CopyButton text={node ? hastText(node).replace(/\n$/, "") : ""} label="Copy code" compact />
@@ -76,7 +77,7 @@ const rehypePlugins = [rehypeKatex, rehypeHighlight];
 /** Agent markdown. Raw HTML is dropped (skipHtml) and URLs are restricted; never add rehype-raw here. */
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
   return (
-    <div className="lq-md">
+    <div className="lq-md" {...part("markdown")}>
       <ReactMarkdown
         remarkPlugins={remarkPlugins}
         rehypePlugins={rehypePlugins}

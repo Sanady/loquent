@@ -3,6 +3,7 @@ import type { ThreadSummary } from "../api/client";
 import { useApp } from "../storeContext";
 import { plainTitle } from "../text";
 import { IconPencil, IconPlus, IconTrash, IconX } from "./icons";
+import { part } from "../parts";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -99,7 +100,7 @@ function ThreadRow({
 
   if (mode === "rename") {
     return (
-      <li className="lq-thread is-editing">
+      <li className="lq-thread is-editing" {...part("thread-item", { active: current ? "true" : undefined })}>
         <input
           ref={inputRef}
           className="lq-thread-input"
@@ -118,6 +119,7 @@ function ThreadRow({
     return (
       <li
         className="lq-thread is-confirm"
+        {...part("thread-item", { active: current ? "true" : undefined })}
         role="group"
         aria-label={`Delete ${title}?`}
         onKeyDown={(e) => {
@@ -143,7 +145,7 @@ function ThreadRow({
   }
 
   return (
-    <li className={`lq-thread${current ? " is-current" : ""}`}>
+    <li className={`lq-thread${current ? " is-current" : ""}`} {...part("thread-item", { active: current ? "true" : undefined })}>
       <button
         type="button"
         className="lq-thread-open"
@@ -176,9 +178,9 @@ export function ThreadList({ id, onNavigate, onClose }: { id: string; onNavigate
   const newChatRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <nav id={id} className="lq-sidebar" aria-label="Chats">
-      <div className="lq-sidebar-top">
-        <button ref={newChatRef} type="button" className="lq-new-chat" onClick={() => {
+    <nav id={id} className="lq-sidebar" aria-label="Chats" {...part("sidebar")}>
+      <div className="lq-sidebar-top" {...part("sidebar-header")}>
+        <button ref={newChatRef} type="button" className="lq-new-chat" {...part("new-chat")} onClick={() => {
           newThread();
           onNavigate();
         }}>
@@ -191,7 +193,7 @@ export function ThreadList({ id, onNavigate, onClose }: { id: string; onNavigate
           </button>
         )}
       </div>
-      <div className="lq-thread-scroll">
+      <div className="lq-thread-scroll" {...part("thread-list")}>
         {threads.length === 0 ? (
           <p className="lq-thread-empty">Your conversations will appear here.</p>
         ) : (

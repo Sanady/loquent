@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { part } from "../parts";
 import type { Attachment } from "../state/reducer";
 import { useFileUrl } from "../storeContext";
 import { IconFile } from "./icons";
@@ -79,6 +80,7 @@ export function AttachmentChip({ file }: { file: Attachment }) {
     <button
       type="button"
       className={`lq-chip${failed ? " is-failed" : ""}`}
+      {...part("attachment", { state: failed ? "error" : undefined })}
       onClick={onClick}
       aria-busy={busy}
       aria-label={`Open ${file.name}${size ? `, ${size}` : ""}${failed ? " (could not open)" : ""}`}

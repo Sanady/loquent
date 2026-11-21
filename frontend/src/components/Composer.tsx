@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type
 import { useApp, useAppStore } from "../storeContext";
 import { formatSize } from "./AttachmentChip";
 import { IconFile, IconPaperclip, IconSend, IconStop, IconX } from "./icons";
+import { part } from "../parts";
 
 const MAX_ROWS_PX = 220;
 
@@ -129,7 +130,7 @@ export function Composer() {
   };
 
   return (
-    <form className="lq-composer" aria-label="Message" onSubmit={onSubmit}>
+    <form className="lq-composer" aria-label="Message" onSubmit={onSubmit} {...part("composer")}>
       <div className="lq-composer-box">
         {files.length > 0 && (
           <ul className="lq-pending" aria-label="Files to send">
@@ -155,6 +156,7 @@ export function Composer() {
         <textarea
           ref={boxRef}
           className="lq-input"
+          {...part("composer-input")}
           rows={1}
           aria-label="Message"
           placeholder="Send a message"
@@ -178,7 +180,7 @@ export function Composer() {
                   e.target.value = "";
                 }}
               />
-              <button type="button" className="lq-icon-btn" aria-label="Attach files" title="Attach files" onClick={() => fileRef.current?.click()}>
+              <button type="button" className="lq-icon-btn" {...part("composer-attach")} aria-label="Attach files" title="Attach files" onClick={() => fileRef.current?.click()}>
                 <IconPaperclip />
               </button>
             </>
@@ -187,11 +189,11 @@ export function Composer() {
             Enter to send · Shift+Enter for a new line
           </span>
           {busy ? (
-            <button type="button" className="lq-send is-stop" aria-label="Stop response" title="Stop" onClick={() => void store.getState().stop()}>
+            <button type="button" className="lq-send is-stop" {...part("composer-send", { state: "running" })} aria-label="Stop response" title="Stop" onClick={() => void store.getState().stop()}>
               <IconStop />
             </button>
           ) : (
-            <button type="submit" className="lq-send" aria-label="Send message" title="Send" disabled={!canSubmit}>
+            <button type="submit" className="lq-send" {...part("composer-send")} aria-label="Send message" title="Send" disabled={!canSubmit}>
               <IconSend />
             </button>
           )}
