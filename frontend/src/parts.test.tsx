@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { AppearancePanel } from "./components/AppearancePanel";
-import { PARTS, part } from "./parts";
+import { PARTS, PART_TARGETS, ROLES, STATES, part } from "./parts";
 import { createAppStore } from "./state/store";
 import type { Item } from "./state/reducer";
 import { botMsg, defaultConfig, fakeApi, userMsg, view } from "./test/helpers";
@@ -31,7 +31,7 @@ const fixture: Item[] = [
 ];
 
 function partsIn(root: ParentNode): Set<string> {
-  return new Set([...root.querySelectorAll("[data-lq-part]")].map((e) => e.getAttribute("data-lq-part")!));
+  return new Set([...root.querySelectorAll("[data-lq-part]")].flatMap((e) => e.getAttribute("data-lq-part")!.split(/\s+/)));
 }
 
 async function mount(config = defaultConfig({ attachments: true }), prime?: (s: ReturnType<typeof createAppStore>) => void, over: Record<string, unknown> = {}) {
@@ -46,7 +46,8 @@ async function mount(config = defaultConfig({ attachments: true }), prime?: (s: 
 afterEach(() => vi.unstubAllGlobals());
 
 describe("named parts", () => {
-  it("part() builds data attributes", () => {
+  it("part() builds a token list and data attributes", () => {
+    expect(part(["activity", "activity-tool"], { state: "running" })).toEqual({ "data-lq-part": "activity activity-tool", "data-lq-state": "running" });
     expect(part("message", { role: "user", state: undefined })).toEqual({ "data-lq-part": "message", "data-lq-role": "user" });
   });
 
@@ -88,10 +89,32 @@ describe("named parts", () => {
     const { store } = await mount();
     await screen.findByText("First chat");
     act(() => store.setState({ view: view([userMsg("u1", "hi"), botMsg("a1", "yo", true), { kind: "step", id: "s", name: "S", status: "running" } as unknown as Item, { kind: "tool", id: "t", name: "T", status: "done", args: "{}", result: "{}" } as unknown as Item], "running") }));
-    expect(document.querySelector('[data-lq-part="message"][data-lq-role="user"]')).toBeTruthy();
-    expect(document.querySelector('[data-lq-part="message"][data-lq-role="assistant"][data-lq-state="streaming"]')).toBeTruthy();
-    expect(document.querySelector('[data-lq-part="activity"][data-lq-state="running"] [data-lq-part="activity-step"]')).toBeTruthy();
-    expect(document.querySelector('[data-lq-part="activity"][data-lq-state="done"] [data-lq-part="activity-tool"]')).toBeTruthy();
-    expect(document.querySelector('[data-lq-part="thread-item"][data-lq-active]')).toBeNull();
+    expect(document.querySelector('[data-lq-part~="message"][data-lq-role="user"]')).toBeTruthy();
+    expect(document.querySelector('[data-lq-part~="message"][data-lq-role="assistant"][data-lq-state="streaming"]')).toBeTruthy();
+    expect(document.querySelector('[data-lq-part~="activity"][data-lq-part~="activity-step"][data-lq-state="running"]')).toBeTruthy();
+    expect(document.querySelector('[data-lq-part~="activity"][data-lq-part~="activity-tool"][data-lq-state="done"]')).toBeTruthy();
+    expect(document.querySelector('[data-lq-part~="thread-item"][data-lq-active]')).toBeNull();
+  });
+
+  it("observed state and role values stay inside the contract", async () => {
+    const wide = await mount();
+    await screen.findByText("First chat");
+    const seen = { state: new Set<string>(), role: new Set<string>(), active: new Set<string>() };
+    const collect = () => {
+      for (const k of ["state", "role", "active"] as const)
+        document.querySelectorAll(`[data-lq-${k}]`).forEach((e) => seen[k].add(e.getAttribute(`data-lq-${k}`)!));
+    };
+    act(() => wide.store.setState({ view: view(fixture) }));
+    collect();
+    act(() => wide.store.setState({ view: view([userMsg("u", "x"), botMsg("a", "y", true), { kind: "step", id: "s", name: "S", status: "running" } as unknown as Item], "running") }));
+    collect();
+    expect(seen.state.size).toBeGreaterThan(1);
+    for (const v of seen.state) expect(STATES).toContain(`data-lq-state=${v}`);
+    for (const v of seen.role) expect(ROLES).toContain(v);
+    for (const v of seen.active) expect(STATES).toContain(`data-lq-active=${v}`);
+  });
+
+  it("every part is documented in PART_TARGETS", () => {
+    expect(Object.keys(PART_TARGETS).sort()).toEqual([...PARTS].sort());
   });
 });

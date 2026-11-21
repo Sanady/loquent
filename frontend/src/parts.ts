@@ -9,6 +9,9 @@ import { COLOR_TOKENS } from "./themes";
 
 export const STYLE_CONTRACT_VERSION = "1.0.0";
 
+/** The documented selector form for a part; `data-lq-part` is a token list, so `~=`. */
+export const PART_SELECTOR = '[data-lq-part~="<name>"]';
+
 export const PARTS = [
   "app",
   "sidebar",
@@ -98,12 +101,68 @@ export const STATES = [
   "data-lq-active=true",
 ] as const;
 
+export type StateValue = "streaming" | "running" | "done" | "error";
+export const ROLES = ["user", "assistant"] as const;
+export type RoleValue = (typeof ROLES)[number];
+
 /**
- * Spread onto an element: `<div {...part("message", { role: "user" })}>`. Each extra key
- * becomes `data-lq-<key>`; undefined values are skipped.
+ * The element each part lands on, with the state attributes it may carry. `data-lq-part` is a
+ * space-separated token list, like `class`: target it with `[data-lq-part~="name"]`, never `=`.
+ * Composite parts put a generic and a kind token on one element (`activity activity-tool`).
+ * Messages differ: the row is `message` (with `data-lq-role`), and the content inside it is
+ * `message-user` (the bubble) or `message-assistant` (the body), because one element cannot be
+ * both the row and its content without changing the layout.
  */
-export function part(name: PartName, extra: Record<string, string | undefined> = {}): Record<string, string> {
-  const attrs: Record<string, string> = { "data-lq-part": name };
+export const PART_TARGETS: Record<PartName, string> = {
+  app: "The root element of the whole UI, including the login screen.",
+  sidebar: "The chats nav.",
+  "sidebar-header": "The strip at the top of the sidebar holding new-chat (and the close button when narrow).",
+  "new-chat": "The New chat button in the sidebar.",
+  "thread-list": "The scrolling container of thread groups. Also holds the empty hint.",
+  "thread-item": "One thread row (viewing, renaming or confirming delete). data-lq-active=true on the current thread.",
+  main: "The column holding header, conversation and composer.",
+  header: "The top bar.",
+  "header-title": "The brand block (logo and app name) in the header.",
+  "header-actions": "The group of header buttons.",
+  conversation: "The scrolling conversation region.",
+  "empty-state": "The greeting shown when the thread has no items. Absent otherwise.",
+  message: "A message row, user or assistant. data-lq-role=user|assistant; assistant rows carry data-lq-state=streaming|done.",
+  "message-user": "The user's text bubble inside a user message row. Absent for attachments-only messages.",
+  "message-assistant": "The assistant's body (markdown, or the typing indicator) inside an assistant message row.",
+  "message-actions": "The action bar under a finished assistant message. Absent while streaming or empty.",
+  markdown: "The rendered markdown container of an assistant message.",
+  "code-block": "A fenced code block, including its header bar.",
+  activity: "One step or tool row (same element as activity-step or activity-tool). data-lq-state=running|done|error (error is reserved; not emitted yet).",
+  "activity-step": "Kind token on the activity row for a step.",
+  "activity-tool": "Kind token on the activity row for a tool call.",
+  widget: "Every widget element, including the pending and fallback placeholders. Kind tokens widget-confirm|widget-select|widget-form sit on the same element once rendered.",
+  "widget-confirm": "Kind token on the widget element for a confirm widget.",
+  "widget-select": "Kind token on the widget element for a select widget.",
+  "widget-form": "Kind token on the widget element for a form widget.",
+  error: "An error item in the conversation. data-lq-state=error.",
+  composer: "The message form.",
+  "composer-input": "The message textarea.",
+  "composer-attach": "The attach button. Absent when attachments are disabled.",
+  "composer-send": "The send button, or the stop button while a run is active (then data-lq-state=running).",
+  attachment: "An attachment chip in a message. data-lq-state=error when it could not be opened.",
+  "appearance-panel": "The appearance settings region. Conditional: only while the panel is open.",
+  login: "The sign-in screen. Conditional: only in password mode without a user.",
+  drawer: "Alias on the sidebar wrapper (the element around sidebar). Conditional: only on narrow screens with the drawer open.",
+};
+
+interface PartExtra {
+  state?: StateValue;
+  role?: RoleValue;
+  active?: "true";
+}
+
+/**
+ * Spread onto an element: `<div {...part("message", { role: "user" })}>`. Pass an array for
+ * several tokens: `part(["activity", "activity-tool"])`. Extras become `data-lq-<key>`;
+ * undefined values are skipped.
+ */
+export function part(names: PartName | readonly PartName[], extra: PartExtra = {}): Record<string, string> {
+  const attrs: Record<string, string> = { "data-lq-part": typeof names === "string" ? names : names.join(" ") };
   for (const [k, v] of Object.entries(extra)) if (v !== undefined) attrs[`data-lq-${k}`] = v;
   return attrs;
 }

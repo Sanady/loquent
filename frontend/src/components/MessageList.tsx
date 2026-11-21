@@ -80,7 +80,7 @@ export function MessageList() {
           case "tool":
             return <ToolRow key={`t-${it.id}`} item={it} />;
           case "widget":
-            return <div key={`w-${it.id}`} className="lq-widget-slot" {...part("widget")}>{renderWidget(it, { interactive: i === lastPending })}</div>;
+            return <div key={`w-${it.id}`} className="lq-widget-slot">{renderWidget(it, { interactive: i === lastPending })}</div>;
           case "error":
             return <ErrorItem key={`e-${i}`} item={it} />;
           default:

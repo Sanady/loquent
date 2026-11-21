@@ -33,12 +33,11 @@ function Row({
   return (
     <div
       className={`lq-activity lq-activity-${kind}${open ? " is-open" : ""}`}
-      {...part("activity", { state: running ? "running" : "done" })}
+      {...part(["activity", kind === "tool" ? "activity-tool" : "activity-step"], { state: running ? "running" : "done" })}
     >
       <button
         type="button"
         className="lq-activity-head"
-        {...part(kind === "tool" ? "activity-tool" : "activity-step")}
         aria-expanded={open}
         aria-controls={id}
         onClick={() => setOpen((o) => !o)}

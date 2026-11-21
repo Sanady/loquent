@@ -18,7 +18,7 @@ export function argsObject(item: WidgetItem): Record<string, unknown> | null {
 
 export function Fallback({ message }: { message?: string }) {
   return (
-    <div className="lq-widget lq-widget-fallback">
+    <div className="lq-widget lq-widget-fallback" {...part("widget")}>
       {message ? <p className="lq-widget-message">{message}</p> : null}
       <p className="lq-widget-pending">This form can't be displayed.</p>
     </div>
@@ -27,7 +27,7 @@ export function Fallback({ message }: { message?: string }) {
 
 export function Pending() {
   return (
-    <div className="lq-widget" role="status">
+    <div className="lq-widget" role="status" {...part("widget")}>
       <p className="lq-widget-pending">Preparing…</p>
     </div>
   );
@@ -41,7 +41,7 @@ const WIDGET_PART: Record<string, PartName> = {
 
 export function Shell({ widget, children }: { widget: string; children: ReactNode }) {
   return (
-    <div className="lq-widget" data-widget={widget} {...part(WIDGET_PART[widget] ?? "widget")}>
+    <div className="lq-widget" data-widget={widget} {...part(WIDGET_PART[widget] ? ["widget", WIDGET_PART[widget]] : "widget")}>
       {children}
     </div>
   );
