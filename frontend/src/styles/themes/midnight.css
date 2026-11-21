@@ -27,9 +27,9 @@
     --lq-danger: #fb7185;
     --lq-scrim: #02040ab3;
 
-    --lq-font-body: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    --lq-font-display: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    --lq-font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    --lq-font-body: "Geist Variable", "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --lq-font-display: "Geist Variable", "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --lq-font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 
     /* Navy-tinted depth with a faint cool top highlight. */
     --lq-shadow-1: inset 0 1px 0 rgb(148 170 230 / 0.04), 0 1px 2px rgb(2 6 23 / 0.45);
