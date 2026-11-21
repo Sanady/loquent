@@ -77,6 +77,9 @@ export function MessageList() {
     if (it.kind === "widget" && it.answer === undefined) lastPending = i;
   });
   if (lastPending < lastUser) lastPending = -1;
+  // A step or tool still "running" is stopped once its run is over: the run is no longer live,
+  // or it belongs to an earlier turn (before the last user message).
+  const runLive = starting || running;
   // A failed run that ended on an error offers Retry on the error itself, not in a run note.
   const retryOnError = !starting && run === "failed" && last?.kind === "error";
   const showTyping =
@@ -101,9 +104,9 @@ export function MessageList() {
               />
             );
           case "step":
-            return <StepRow key={`s-${i}`} item={it} />;
+            return <StepRow key={`s-${i}`} item={it} runEnded={!runLive || i < lastUser} />;
           case "tool":
-            return <ToolRow key={`t-${it.id}`} item={it} />;
+            return <ToolRow key={`t-${it.id}`} item={it} runEnded={!runLive || i < lastUser} />;
           case "widget":
             return <div key={`w-${it.id}`} className="lq-widget-slot">{renderWidget(it, { interactive: i === lastPending })}</div>;
           case "error":

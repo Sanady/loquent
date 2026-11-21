@@ -1,7 +1,9 @@
 @layer lq.components {
   /* Steps and tool calls: compact pill cards (radius-pill, a hairline border) led by a status
-   * dot: accent while running, success when done, danger on error. Opening one turns the pill
-   * into a full-width card that shows the arguments and result in the mono face. */
+   * mark that differs in shape as well as hue: a hollow accent ring while running, a solid
+   * success dot when done, a solid danger dot when its run ended first (state error, read out
+   * as "stopped"). Opening one turns the pill into a full-width card, on the same fill, that
+   * shows the arguments and result in the mono face. */
 
   /* Pill fill (--lqi-activity-bg) and the dot's halo (--lqi-dot-glow): themes tune both in
    * lq.themes; the defaults are the fallbacks at each use. */
@@ -49,14 +51,18 @@
 
   .lq-activity-dot {
     flex: none;
-    width: 7px;
-    height: 7px;
+    width: 8px;
+    height: 8px;
     border-radius: var(--lq-radius-pill);
     background: currentColor;
     color: var(--lqi-dot);
     box-shadow: var(--lqi-dot-glow, none);
   }
+  /* Running: a hollow ring (an inset 2px edge), so it reads apart from done without hue. */
   [data-lq-state="running"] > .lq-activity-head .lq-activity-dot {
+    background: transparent;
+    outline: 2px solid currentColor;
+    outline-offset: -2px;
     animation: lq-dot-pulse 1.4s var(--lq-ease) infinite;
   }
 
@@ -87,7 +93,6 @@
   [data-lq-part~="activity"].is-open {
     align-self: stretch;
     border-radius: var(--lq-radius-lg);
-    background: var(--lq-surface);
   }
   [data-lq-part~="activity"].is-open .lq-activity-head {
     padding-left: var(--lq-space-4);
@@ -127,7 +132,6 @@
     margin: 0;
     padding: var(--lq-space-3);
     overflow: auto;
-    border: 1px solid var(--lq-border);
     border-radius: var(--lq-radius-md);
     background: var(--lq-code-bg);
     color: var(--lq-text);
@@ -145,7 +149,7 @@
       opacity: 1;
     }
     50% {
-      opacity: 0.35;
+      opacity: 0.5;
     }
   }
 

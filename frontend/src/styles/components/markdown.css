@@ -4,21 +4,21 @@
    * display face (the serif in Editorial). Links stay in the text color with an accent
    * underline, so the single accent is not spent on every link. */
 
-  .lq-md {
+  [data-lq-part~="markdown"] {
     overflow-wrap: anywhere;
   }
-  .lq-md > :first-child {
+  [data-lq-part~="markdown"] > :first-child {
     margin-top: 0;
   }
-  .lq-md > :last-child {
+  [data-lq-part~="markdown"] > :last-child {
     margin-bottom: 0;
   }
 
-  .lq-md :is(p, ul, ol, blockquote, dl) {
+  [data-lq-part~="markdown"] :is(p, ul, ol, blockquote, dl) {
     margin: 0 0 var(--lq-space-4);
   }
 
-  .lq-md :is(h1, h2, h3, h4, h5, h6) {
+  [data-lq-part~="markdown"] :is(h1, h2, h3, h4, h5, h6) {
     margin: var(--lq-space-7) 0 var(--lq-space-2);
     font-family: var(--lq-font-display);
     font-weight: var(--lqi-display-weight, 600);
@@ -26,51 +26,51 @@
     line-height: var(--lq-leading-tight);
     text-wrap: balance;
   }
-  .lq-md h1 {
+  [data-lq-part~="markdown"] h1 {
     font-size: var(--lq-text-xl);
   }
-  .lq-md h2 {
+  [data-lq-part~="markdown"] h2 {
     font-size: var(--lq-text-lg);
   }
-  .lq-md :is(h3, h4, h5, h6) {
+  [data-lq-part~="markdown"] :is(h3, h4, h5, h6) {
     margin-top: var(--lq-space-6);
     font-size: var(--lq-text-base);
   }
-  .lq-md :is(h1, h2, h3, h4, h5, h6) + * {
+  [data-lq-part~="markdown"] :is(h1, h2, h3, h4, h5, h6) + * {
     margin-top: 0;
   }
 
-  .lq-md strong {
+  [data-lq-part~="markdown"] strong {
     font-weight: 600;
   }
 
-  .lq-md :is(ul, ol) {
+  [data-lq-part~="markdown"] :is(ul, ol) {
     padding-left: var(--lq-space-6);
   }
-  .lq-md li + li,
-  .lq-md li > :is(ul, ol) {
+  [data-lq-part~="markdown"] li + li,
+  [data-lq-part~="markdown"] li > :is(ul, ol) {
     margin-top: var(--lq-space-1);
   }
-  .lq-md li > :is(ul, ol) {
+  [data-lq-part~="markdown"] li > :is(ul, ol) {
     margin-bottom: 0;
   }
-  .lq-md li > p {
+  [data-lq-part~="markdown"] li > p {
     margin-bottom: var(--lq-space-2);
   }
-  .lq-md li::marker {
+  [data-lq-part~="markdown"] li::marker {
     color: var(--lq-text-subtle);
   }
-  .lq-md .contains-task-list {
+  [data-lq-part~="markdown"] .contains-task-list {
     padding-left: var(--lq-space-1);
     list-style: none;
   }
-  .lq-md input[type="checkbox"] {
+  [data-lq-part~="markdown"] input[type="checkbox"] {
     margin: 0 var(--lq-space-2) 0 0;
     vertical-align: -0.1em;
     accent-color: var(--lq-accent);
   }
 
-  .lq-md a {
+  [data-lq-part~="markdown"] a {
     color: inherit;
     text-decoration: underline;
     text-decoration-color: color-mix(in srgb, var(--lq-accent) 55%, transparent);
@@ -78,28 +78,28 @@
     text-underline-offset: 0.2em;
     transition: text-decoration-color var(--lq-duration-fast) var(--lq-ease);
   }
-  .lq-md a:hover {
+  [data-lq-part~="markdown"] a:hover {
     text-decoration-color: var(--lq-accent);
   }
   /* A link whose URL was refused (unsafe scheme) keeps its text but reads as dead. */
-  .lq-md a:not([href]) {
+  [data-lq-part~="markdown"] a:not([href]) {
     text-decoration-line: line-through;
     text-decoration-color: var(--lq-text-subtle);
   }
 
-  .lq-md blockquote {
+  [data-lq-part~="markdown"] blockquote {
     padding: 0 0 0 var(--lq-space-4);
     border-left: 2px solid var(--lq-border-strong);
     color: var(--lq-text-muted);
   }
 
-  .lq-md hr {
+  [data-lq-part~="markdown"] hr {
     margin: var(--lq-space-7) 0;
     border: 0;
     border-top: 1px solid var(--lq-border);
   }
 
-  .lq-md img {
+  [data-lq-part~="markdown"] img {
     max-width: 100%;
     height: auto;
     border-radius: var(--lq-radius-md);
@@ -110,7 +110,7 @@
   }
 
   /* Inline code: a code-bg lozenge in the mono face. Inside a heading it takes the heading size. */
-  .lq-md :not(pre) > code {
+  [data-lq-part~="markdown"] :not(pre) > code {
     padding: 0.1em 0.35em;
     border-radius: var(--lq-radius-sm);
     background: var(--lq-code-bg);
@@ -121,7 +121,7 @@
     font-size: var(--lq-text-sm);
     font-variant-ligatures: none;
   }
-  .lq-md :is(h1, h2, h3, h4, h5, h6) code {
+  [data-lq-part~="markdown"] :is(h1, h2, h3, h4, h5, h6) code {
     font-size: inherit;
   }
 
@@ -133,31 +133,31 @@
     border: 1px solid var(--lq-border);
     border-radius: var(--lq-radius-md);
   }
-  .lq-md table {
+  [data-lq-part~="markdown"] table {
     width: 100%;
     border-collapse: collapse;
     font-size: var(--lq-text-sm);
     line-height: 1.5;
     font-variant-numeric: tabular-nums;
   }
-  .lq-md :is(th, td) {
+  [data-lq-part~="markdown"] :is(th, td) {
     padding: var(--lq-space-2) var(--lq-space-3);
     border-bottom: 1px solid var(--lq-border);
     text-align: left;
     vertical-align: top;
   }
-  .lq-md th {
+  [data-lq-part~="markdown"] th {
     background: var(--lq-bg-subtle);
     font-weight: 600;
   }
-  .lq-md tr:last-child td {
+  [data-lq-part~="markdown"] tr:last-child td {
     border-bottom: 0;
   }
 
   /* ---------- math ---------- */
 
   /* KaTeX's own CSS (unlayered) sets the math font and size; only the overflow is ours. */
-  .lq-md .katex-display {
+  [data-lq-part~="markdown"] .katex-display {
     padding: var(--lq-space-1) 0;
     overflow-x: auto;
     overflow-y: hidden;

@@ -66,44 +66,44 @@
 
   /* ---------- syntax ---------- */
 
-  .lq-md :is(.hljs-keyword, .hljs-doctag, .hljs-template-tag, .hljs-selector-tag, .hljs-variable.language_) {
+  [data-lq-part~="markdown"] :is(.hljs-keyword, .hljs-doctag, .hljs-template-tag, .hljs-selector-tag, .hljs-variable.language_) {
     color: var(--lqi-syntax-keyword, var(--lq-text));
   }
-  .lq-md :is(.hljs-string, .hljs-regexp, .hljs-char.escape_, .hljs-meta .hljs-string) {
+  [data-lq-part~="markdown"] :is(.hljs-string, .hljs-regexp, .hljs-char.escape_, .hljs-meta .hljs-string) {
     color: var(--lqi-syntax-string, var(--lq-text));
   }
-  .lq-md :is(.hljs-number, .hljs-literal, .hljs-symbol, .hljs-bullet, .hljs-link) {
+  [data-lq-part~="markdown"] :is(.hljs-number, .hljs-literal, .hljs-symbol, .hljs-bullet, .hljs-link) {
     color: var(--lqi-syntax-number, var(--lq-text));
   }
-  .lq-md :is(.hljs-title, .hljs-section, .hljs-name, .hljs-selector-id, .hljs-selector-class) {
+  [data-lq-part~="markdown"] :is(.hljs-title, .hljs-section, .hljs-name, .hljs-selector-id, .hljs-selector-class) {
     color: var(--lqi-syntax-title, var(--lq-text));
   }
-  .lq-md :is(.hljs-type, .hljs-built_in, .hljs-attr, .hljs-attribute, .hljs-property, .hljs-selector-attr, .hljs-selector-pseudo, .hljs-variable, .hljs-template-variable) {
+  [data-lq-part~="markdown"] :is(.hljs-type, .hljs-built_in, .hljs-attr, .hljs-attribute, .hljs-property, .hljs-selector-attr, .hljs-selector-pseudo, .hljs-variable, .hljs-template-variable) {
     color: var(--lqi-syntax-type, var(--lq-text));
   }
-  .lq-md :is(.hljs-meta, .hljs-meta .hljs-keyword) {
+  [data-lq-part~="markdown"] :is(.hljs-meta, .hljs-meta .hljs-keyword) {
     color: var(--lqi-syntax-meta, var(--lq-text-muted));
   }
-  .lq-md :is(.hljs-comment, .hljs-quote) {
+  [data-lq-part~="markdown"] :is(.hljs-comment, .hljs-quote) {
     color: var(--lqi-syntax-comment, var(--lq-text-muted));
     font-style: italic;
   }
-  .lq-md :is(.hljs-section, .hljs-strong) {
+  [data-lq-part~="markdown"] :is(.hljs-section, .hljs-strong) {
     font-weight: 600;
   }
-  .lq-md .hljs-emphasis {
+  [data-lq-part~="markdown"] .hljs-emphasis {
     font-style: italic;
   }
   /* Diffs: the text color on a status tint, so the line stays readable in every theme. */
-  .lq-md :is(.hljs-addition, .hljs-deletion) {
+  [data-lq-part~="markdown"] :is(.hljs-addition, .hljs-deletion) {
     display: inline-block;
     min-width: 100%;
     color: var(--lq-text);
   }
-  .lq-md .hljs-addition {
+  [data-lq-part~="markdown"] .hljs-addition {
     background: color-mix(in srgb, var(--lq-success) 14%, transparent);
   }
-  .lq-md .hljs-deletion {
+  [data-lq-part~="markdown"] .hljs-deletion {
     background: color-mix(in srgb, var(--lq-danger) 14%, transparent);
   }
 }

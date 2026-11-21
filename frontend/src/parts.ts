@@ -132,7 +132,7 @@ export const PART_TARGETS: Record<PartName, string> = {
   "message-actions": "The action bar under a finished assistant message. Absent while streaming or empty.",
   markdown: "The rendered markdown container of an assistant message.",
   "code-block": "A fenced code block, including its header bar.",
-  activity: "One step or tool row (same element as activity-step or activity-tool). data-lq-state=running|done|error (error is reserved; not emitted yet).",
+  activity: "One step or tool row (same element as activity-step or activity-tool). data-lq-state=running|done|error (error: it was still running when its run ended, so it will not finish).",
   "activity-step": "Kind token on the activity row for a step.",
   "activity-tool": "Kind token on the activity row for a tool call.",
   widget: "Every widget element, including the pending and fallback placeholders. Kind tokens widget-confirm|widget-select|widget-form sit on the same element once rendered.",

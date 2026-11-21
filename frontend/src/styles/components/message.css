@@ -52,8 +52,8 @@
   }
 
   /* Streaming caret: a slim accent bar after the last block of the reply. */
-  [data-lq-state="streaming"] .lq-md > :is(p, h1, h2, h3, h4, h5, h6):last-child::after,
-  [data-lq-state="streaming"] .lq-md > :is(ul, ol):last-child > li:last-child::after {
+  [data-lq-state="streaming"] [data-lq-part~="markdown"] > :is(p, h1, h2, h3, h4, h5, h6):last-child::after,
+  [data-lq-state="streaming"] [data-lq-part~="markdown"] > :is(ul, ol):last-child > li:last-child::after {
     content: "";
     display: inline-block;
     width: 0.5em;
@@ -199,8 +199,8 @@
     .lq-typing > span:not(.lq-sr) {
       animation: none;
     }
-    [data-lq-state="streaming"] .lq-md > :is(p, h1, h2, h3, h4, h5, h6):last-child::after,
-    [data-lq-state="streaming"] .lq-md > :is(ul, ol):last-child > li:last-child::after {
+    [data-lq-state="streaming"] [data-lq-part~="markdown"] > :is(p, h1, h2, h3, h4, h5, h6):last-child::after,
+    [data-lq-state="streaming"] [data-lq-part~="markdown"] > :is(ul, ol):last-child > li:last-child::after {
       animation: none;
     }
   }
