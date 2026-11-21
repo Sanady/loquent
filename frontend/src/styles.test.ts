@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import mainSrc from "./main.tsx?raw";
-import legacyCss from "./styles.css?raw";
 
 // Every component stylesheet, read as text. vite.config.ts css.include lets these through.
 const COMPONENT_CSS = import.meta.glob<string>("./styles/components/*.css", { query: "?raw", import: "default", eager: true });
 
 const SHELL_FILES = ["shell", "sidebar", "header", "composer", "empty", "login", "drawer"];
+const CONVERSATION_FILES = ["message", "markdown", "code", "activity", "widget", "error", "attachment"];
 
 const files = () => Object.entries(COMPONENT_CSS).map(([path, css]) => [path.replace(/^.*\//, ""), css] as const);
 const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
@@ -27,9 +27,9 @@ function declarations(css: string): [string, string][] {
 }
 
 describe("component css", () => {
-  it("has a stylesheet for each shell region", () => {
+  it("has a stylesheet for each shell and conversation region", () => {
     const names = files().map(([name]) => name);
-    for (const f of SHELL_FILES) expect(names, `${f}.css`).toContain(`${f}.css`);
+    for (const f of [...SHELL_FILES, ...CONVERSATION_FILES]) expect(names, `${f}.css`).toContain(`${f}.css`);
   });
 
   it("all component css is layered", () => {
@@ -61,22 +61,13 @@ describe("component css", () => {
     const at = order.map((p) => mainSrc.indexOf(`"${p}`));
     for (const [i, p] of order.entries()) expect(at[i], p).toBeGreaterThanOrEqual(0);
     expect([...at].sort((a, b) => a - b)).toEqual(at);
-    for (const f of SHELL_FILES) expect(mainSrc, f).toContain(`"./styles/components/${f}.css"`);
+    for (const f of [...SHELL_FILES, ...CONVERSATION_FILES]) expect(mainSrc, f).toContain(`"./styles/components/${f}.css"`);
   });
 
-  it("the legacy stylesheet no longer styles the shell", () => {
-    // Unlayered legacy rules beat every layer, so a shell selector left there would win.
-    const css = stripComments(legacyCss);
-    const shell = [
-      ".lq-header", ".lq-brand", ".lq-sidebar", ".lq-new-chat", ".lq-thread", ".lq-nav-wrap", ".lq-scrim",
-      ".lq-layout", ".lq-main", ".lq-composer", ".lq-send", ".lq-input", ".lq-dock", ".lq-empty",
-      ".lq-login", ".lq-fatal", ".lq-boot", ".lq-btn", ".lq-icon-btn", ".lq-notice", ".lq-jump",
-    ];
-    // A selector that starts with a shell class (a conversation rule may still adjust a shell
-    // primitive in its own context, e.g. `.lq-run-note .lq-btn`).
-    for (const sel of shell) {
-      expect(css, sel).not.toMatch(new RegExp(`(?:^|[,{}]\\s*|:root\\s+|\\.lq-root\\s+)${sel.replace(".", "\\.")}(?![\\w-])`));
-    }
-    expect(css, "focus ring").not.toMatch(/:focus-visible\s*\{\s*outline:/);
+  it("no unlayered app or decorative third-party css is imported", () => {
+    // Unlayered CSS beats every layer, so only KaTeX's functional stylesheet may stay unlayered.
+    const imports = [...mainSrc.matchAll(/^import\s+"([^"]+\.css)";/gm)].map((m) => m[1]);
+    expect(imports.filter((p) => !p.startsWith("./styles/"))).toEqual(["katex/dist/katex.min.css"]);
+    expect(mainSrc).not.toContain("highlight.js");
   });
 });

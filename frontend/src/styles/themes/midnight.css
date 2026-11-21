@@ -41,5 +41,20 @@
     --lqi-new-chat-bg: var(--lq-surface-raised);
     --lqi-new-chat-border: color-mix(in srgb, var(--lq-border-strong) 35%, var(--lq-border));
     --lqi-glow: 0 0 16px -6px color-mix(in srgb, var(--lq-accent) 45%, transparent);
+
+    /* Syntax colors (private, see components/code.css), each 4.5:1 or better on code-bg:
+     * the teal accent on keywords, mint strings, gold numbers. */
+    --lqi-syntax-keyword: #22d3ee;
+    --lqi-syntax-string: #6ee7b7;
+    --lqi-syntax-number: #fcd34d;
+    --lqi-syntax-title: #93c5fd;
+    --lqi-syntax-type: #f0abfc;
+    --lqi-syntax-meta: #fda4af;
+    --lqi-syntax-comment: #7c87a6;
+
+    /* Conversation touches (see components/activity.css, widget.css): status dots glow in their
+     * own color, and widget cards fall from surface-raised into surface. */
+    --lqi-dot-glow: 0 0 8px -1px currentColor;
+    --lqi-widget-bg: linear-gradient(180deg, var(--lq-surface-raised), var(--lq-surface));
   }
 }

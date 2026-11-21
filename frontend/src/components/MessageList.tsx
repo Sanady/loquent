@@ -14,11 +14,18 @@ function lastAssistantIndex(items: Item[]): number {
   return -1;
 }
 
-function ErrorItem({ item }: { item: Extract<Item, { kind: "error" }> }) {
+/** An error in the conversation. The one that ended a failed run carries its Retry. */
+function ErrorItem({ item, onRetry }: { item: Extract<Item, { kind: "error" }>; onRetry?: () => void }) {
   return (
     <div className="lq-error" {...part("error", { state: "error" })}>
       <IconAlert />
-      <span>{item.message}</span>
+      <span className="lq-error-text">{item.message}</span>
+      {onRetry && (
+        <button type="button" className="lq-btn lq-btn-sm" onClick={onRetry}>
+          <IconRefresh />
+          Retry
+        </button>
+      )}
     </div>
   );
 }
@@ -71,6 +78,8 @@ export function MessageList() {
     if (it.kind === "widget" && it.answer === undefined) lastPending = i;
   });
   if (lastPending < lastUser) lastPending = -1;
+  // A failed run that ended on an error offers Retry on the error itself, not in a run note.
+  const retryOnError = !starting && run === "failed" && last?.kind === "error";
   const showTyping =
     (running || starting) && !(last?.kind === "message" && last.role === "assistant" && last.streaming);
 
@@ -99,7 +108,13 @@ export function MessageList() {
           case "widget":
             return <div key={`w-${it.id}`} className="lq-widget-slot">{renderWidget(it, { interactive: i === lastPending })}</div>;
           case "error":
-            return <ErrorItem key={`e-${i}`} item={it} />;
+            return (
+              <ErrorItem
+                key={`e-${i}`}
+                item={it}
+                onRetry={retryOnError && i === items.length - 1 ? () => void regenerate() : undefined}
+              />
+            );
           default:
             return null;
         }
@@ -111,7 +126,7 @@ export function MessageList() {
           </div>
         </div>
       )}
-      {!starting && (run === "failed" || run === "interrupted") && (
+      {!starting && !retryOnError && (run === "failed" || run === "interrupted") && (
         <div className="lq-run-note">
           <span>{run === "interrupted" ? "The response was interrupted." : "The response did not finish."}</span>
           <button type="button" className="lq-btn lq-btn-quiet" onClick={() => void regenerate()}>

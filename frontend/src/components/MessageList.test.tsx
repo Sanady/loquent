@@ -28,8 +28,10 @@ describe("MessageList", () => {
     const tool = screen.getByRole("button", { name: /get_weather/ });
     expect(step.getAttribute("aria-expanded")).toBe("false");
     expect(tool.getAttribute("aria-expanded")).toBe("false");
-    // A running step shows a spinner.
-    expect(step.querySelector(".lq-spinner")).not.toBeNull();
+    // A running step shows a running status dot; a finished tool a done one.
+    expect(step.closest('[data-lq-part~="activity"]')!.getAttribute("data-lq-state")).toBe("running");
+    expect(step.querySelector(".lq-activity-dot")).not.toBeNull();
+    expect(tool.closest('[data-lq-part~="activity"]')!.getAttribute("data-lq-state")).toBe("done");
     expect(container.textContent).not.toContain('"city"');
 
     fireEvent.click(tool);

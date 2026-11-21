@@ -1,0 +1,36 @@
+@layer lq.components {
+  /* An error in the conversation: a danger tint with a danger icon, body text in the text
+   * color (the tint is light enough to keep it at AA), and Retry at the end of the row when
+   * the error ended the latest run. */
+
+  [data-lq-part~="error"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--lq-space-2) var(--lq-space-3);
+    padding: var(--lq-space-3) var(--lq-space-3) var(--lq-space-3) var(--lq-space-4);
+    border: 1px solid color-mix(in srgb, var(--lq-danger) 28%, var(--lq-border));
+    border-radius: var(--lq-radius-lg);
+    background: color-mix(in srgb, var(--lq-danger) 7%, var(--lq-bg));
+    color: var(--lq-text);
+    font-size: var(--lq-text-sm);
+    line-height: var(--lq-leading-normal);
+  }
+  /* As tall as one line of text, so the 16px glyph centers on the first line. */
+  [data-lq-part~="error"] > .lq-icon {
+    width: 16px;
+    height: calc(var(--lq-text-sm) * var(--lq-leading-normal));
+    color: var(--lq-danger);
+  }
+  .lq-error-text {
+    flex: 1 1 200px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  /* At the end of the row; on a narrow screen it wraps and stays on the right. */
+  [data-lq-part~="error"] .lq-btn {
+    margin: calc(var(--lq-space-1) * -0.5) 0 calc(var(--lq-space-1) * -0.5) auto;
+    border-color: color-mix(in srgb, var(--lq-danger) 35%, var(--lq-border));
+    background: var(--lq-surface);
+  }
+}

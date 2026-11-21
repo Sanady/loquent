@@ -52,5 +52,22 @@
     --lqi-new-chat-border: transparent;
     --lqi-new-chat-icon: currentColor;
     --lqi-send-radius: var(--lq-radius-pill);
+
+    /* Syntax colors (private, see components/code.css), each 4.5:1 or better on code-bg:
+     * ink-press hues: terracotta keywords (the accent family), olive strings, ochre numbers. */
+    --lqi-syntax-keyword: #9a3412;
+    --lqi-syntax-string: #3f6212;
+    --lqi-syntax-number: #854d0e;
+    --lqi-syntax-title: #1e40af;
+    --lqi-syntax-type: #0f766e;
+    --lqi-syntax-meta: #86198f;
+    --lqi-syntax-comment: #6b6155;
+
+    /* Conversation touches (see components/activity.css, widget.css): tool pills are outlined
+     * on the paper, and a widget's question is set in the serif. */
+    --lqi-activity-bg: transparent;
+    --lqi-widget-title-font: var(--lq-font-display);
+    --lqi-widget-title-size: var(--lq-text-lg);
+    --lqi-widget-title-weight: 600;
   }
 }

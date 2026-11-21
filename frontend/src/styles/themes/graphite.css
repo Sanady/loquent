@@ -34,5 +34,18 @@
     --lq-shadow-1: 0 1px 1px rgb(41 37 30 / 0.03), 0 1px 2px rgb(41 37 30 / 0.04);
     --lq-shadow-2: 0 1px 2px rgb(41 37 30 / 0.04), 0 4px 10px -2px rgb(41 37 30 / 0.06), 0 10px 20px -8px rgb(41 37 30 / 0.06);
     --lq-shadow-3: 0 2px 4px rgb(41 37 30 / 0.04), 0 12px 24px -6px rgb(41 37 30 / 0.08), 0 28px 56px -16px rgb(41 37 30 / 0.12);
+
+    /* Syntax colors (private, see components/code.css), each 4.5:1 or better on code-bg:
+     * violet keywords, green strings, amber numbers, blue names, cyan types. */
+    --lqi-syntax-keyword: #6d28d9;
+    --lqi-syntax-string: #166534;
+    --lqi-syntax-number: #9a4a08;
+    --lqi-syntax-title: #1d4ed8;
+    --lqi-syntax-type: #0e7490;
+    --lqi-syntax-meta: #9d174d;
+    --lqi-syntax-comment: #6b6862;
+
+    /* Conversation touches (see components/activity.css): tool pills sit on the quiet fill. */
+    --lqi-activity-bg: var(--lq-bg-subtle);
   }
 }

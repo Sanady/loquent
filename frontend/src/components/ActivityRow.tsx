@@ -1,7 +1,7 @@
 import { useId, useState, type ReactNode } from "react";
 import { part } from "../parts";
 import type { Item } from "../state/reducer";
-import { IconCheck, IconChevron, IconTool, Spinner } from "./icons";
+import { IconChevron } from "./icons";
 
 type Step = Extract<Item, { kind: "step" }>;
 type Tool = Extract<Item, { kind: "tool" }>;
@@ -16,13 +16,11 @@ function pretty(raw: string | undefined): string {
 }
 
 function Row({
-  icon,
   label,
   kind,
   running,
   children,
 }: {
-  icon?: ReactNode;
   label: string;
   kind: string;
   running: boolean;
@@ -42,14 +40,11 @@ function Row({
         aria-controls={id}
         onClick={() => setOpen((o) => !o)}
       >
+        <span className="lq-activity-dot" aria-hidden="true" />
+        <span className="lq-activity-label">{label}</span>
+        <span className="lq-sr">{running ? "running" : "done"}</span>
         <span className="lq-activity-chevron">
           <IconChevron />
-        </span>
-        {icon}
-        <span className="lq-activity-label">{label}</span>
-        <span className="lq-activity-status">
-          {running ? <Spinner /> : <IconCheck />}
-          <span className="lq-sr">{running ? "running" : "done"}</span>
         </span>
       </button>
       {open && (
@@ -73,7 +68,7 @@ export function ToolRow({ item }: { item: Tool }) {
   const args = pretty(item.args);
   const result = pretty(item.result);
   return (
-    <Row icon={<IconTool />} label={item.name} kind="tool" running={item.status === "running"}>
+    <Row label={item.name} kind="tool" running={item.status === "running"}>
       <div className="lq-io">
         <span className="lq-io-label">Arguments</span>
         <pre>{args || "{}"}</pre>

@@ -8,7 +8,7 @@ import { ThreadList } from "./components/ThreadList";
 import { part } from "./parts";
 import { appStore, type AppStore } from "./state/store";
 import { StoreProvider, useApp, useAppStore } from "./storeContext";
-import { allowedThemes, applyAppearance, effectiveScheme, resolveThemeId, useSystemDark, type ThemePref } from "./theme";
+import { allowedThemes, applyAppearance, resolveThemeId, useSystemDark, type ThemePref } from "./theme";
 import type { ThemeId } from "./themes";
 
 const NAV_ID = "lq-nav";
@@ -207,9 +207,6 @@ function Shell() {
   const locks = config?.lock_tokens;
   useLayoutEffect(() => applyAppearance({ theme }, brand, document.documentElement, locks ?? []), [theme, brand, locks]);
   const cycleTheme = useCallback(() => setPref(themes[(themes.indexOf(theme) + 1) % themes.length]), [themes, theme]);
-  // interim: removed in Task 6 with styles.css. The legacy stylesheet's dark mode keys off
-  // .lq-root[data-mode]; a configured brand background fixes the scheme in every theme (R25).
-  const legacyMode = effectiveScheme(theme, brand);
   useEffect(() => {
     if (config?.app_name) document.title = config.app_name;
   }, [config?.app_name]);
@@ -234,7 +231,7 @@ function Shell() {
   }
 
   return (
-    <div className="lq-root" data-mode={legacyMode} {...part("app")}>
+    <div className="lq-root" {...part("app")}>
       {body}
     </div>
   );

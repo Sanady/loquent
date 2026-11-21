@@ -1,0 +1,238 @@
+@layer lq.components {
+  /* Widgets: elevated surface-raised cards (radius-lg, shadow-1, a hairline border). The
+   * prompt leads in semibold (the display serif in Editorial); the primary action is the
+   * accent, the secondary an outline. A confirm lays its question and buttons out on one row
+   * when there is room, as in the mockups. */
+
+  :root {
+    --lqi-widget-bg: var(--lq-surface-raised);
+    --lqi-widget-title-font: var(--lq-font-body);
+    --lqi-widget-title-size: var(--lq-text-base);
+    --lqi-widget-title-weight: 600;
+    /* The outline of secondary buttons and fields: firmer than border, softer than border-strong. */
+    --lqi-control-border: color-mix(in srgb, var(--lq-border-strong) 45%, var(--lq-border));
+  }
+
+  .lq-widget-slot {
+    max-width: 600px;
+  }
+
+  [data-lq-part~="widget"] {
+    padding: var(--lq-space-4) var(--lq-space-5);
+    border: 1px solid var(--lq-border);
+    border-radius: var(--lq-radius-lg);
+    background: var(--lqi-widget-bg);
+    box-shadow: var(--lq-shadow-1);
+    color: var(--lq-text);
+    font-size: var(--lq-text-sm);
+    line-height: var(--lq-leading-normal);
+  }
+  [data-lq-part~="widget"] p {
+    margin: 0;
+  }
+  [data-lq-part~="widget"] form {
+    margin: 0;
+  }
+
+  .lq-widget-message {
+    margin: 0 0 var(--lq-space-3);
+    color: var(--lq-text);
+    font-family: var(--lqi-widget-title-font);
+    font-size: var(--lqi-widget-title-size);
+    font-weight: var(--lqi-widget-title-weight);
+    line-height: var(--lq-leading-tight);
+    text-wrap: pretty;
+  }
+  .lq-widget-pending {
+    color: var(--lq-text-muted);
+  }
+
+  /* ---------- confirm ---------- */
+
+  [data-lq-part~="widget-confirm"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--lq-space-3) var(--lq-space-5);
+  }
+  [data-lq-part~="widget-confirm"] .lq-widget-message {
+    flex: 1 1 220px;
+    margin: 0;
+  }
+  [data-lq-part~="widget-confirm"] .lq-widget-actions {
+    margin: 0;
+  }
+
+  /* ---------- actions ---------- */
+
+  .lq-widget-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--lq-space-2);
+    margin-top: var(--lq-space-4);
+  }
+  .lq-widget-actions .lq-btn:not(.lq-btn-primary) {
+    border-color: var(--lqi-control-border);
+    background: transparent;
+    box-shadow: none;
+  }
+  .lq-widget-actions .lq-btn:not(.lq-btn-primary):hover:not(:disabled) {
+    background: var(--lqi-hover);
+  }
+  .lq-widget-actions .lq-btn-primary {
+    box-shadow: var(--lq-shadow-1);
+  }
+
+  /* ---------- select and form ---------- */
+
+  .lq-widget-group {
+    display: grid;
+    gap: var(--lq-space-2);
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  /* A legend cannot be a grid item; floated full width it lays out like one. */
+  .lq-widget-group > legend {
+    float: left;
+    width: 100%;
+    padding: 0;
+  }
+  .lq-widget-group > legend + * {
+    clear: both;
+  }
+  .lq-widget-group:disabled {
+    opacity: 0.6;
+  }
+
+  /* Options as selectable rows; the chosen one takes the accent tint. */
+  .lq-widget-option {
+    display: flex;
+    align-items: center;
+    gap: var(--lq-space-3);
+    padding: var(--lq-space-2) var(--lq-space-3);
+    border: 1px solid var(--lq-border);
+    border-radius: var(--lq-radius-md);
+    background: var(--lq-surface);
+    cursor: pointer;
+    transition:
+      border-color var(--lq-duration-fast) var(--lq-ease),
+      background-color var(--lq-duration-fast) var(--lq-ease);
+  }
+  .lq-widget-option:hover {
+    border-color: var(--lqi-control-border);
+  }
+  .lq-widget-option:has(input:checked) {
+    border-color: var(--lq-accent);
+    background: var(--lq-accent-soft);
+  }
+  .lq-widget-group:disabled .lq-widget-option {
+    cursor: default;
+  }
+
+  .lq-widget-field {
+    display: grid;
+    gap: var(--lq-space-1);
+  }
+  .lq-widget-field > label {
+    font-weight: 500;
+  }
+  .lq-widget-field.is-check label {
+    display: flex;
+    align-items: center;
+    gap: var(--lq-space-2);
+    font-weight: 400;
+  }
+
+  .lq-widget-option input,
+  .lq-widget-field.is-check input {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--lq-accent);
+  }
+
+  .lq-widget-field input:not([type="checkbox"]),
+  .lq-widget-field select {
+    width: 100%;
+    height: 36px;
+    padding: 0 var(--lq-space-3);
+    border: 1px solid var(--lqi-control-border);
+    border-radius: var(--lq-radius-md);
+    background: var(--lq-surface);
+    color: var(--lq-text);
+    font-size: var(--lq-text-sm);
+    transition:
+      border-color var(--lq-duration-fast) var(--lq-ease),
+      box-shadow var(--lq-duration-fast) var(--lq-ease);
+  }
+  .lq-widget-field input:not([type="checkbox"]):focus,
+  .lq-widget-field select:focus {
+    border-color: var(--lq-focus-ring);
+    box-shadow: 0 0 0 3px var(--lq-accent-soft);
+    outline: none;
+  }
+  .lq-widget-field [aria-invalid="true"] {
+    border-color: var(--lq-danger);
+  }
+  .lq-widget-req {
+    color: var(--lq-danger);
+  }
+  .lq-widget-error {
+    color: var(--lq-danger);
+    font-size: var(--lq-text-xs);
+  }
+
+  /* ---------- answered ---------- */
+
+  .lq-widget-answer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--lq-space-2);
+    color: var(--lq-text-muted);
+  }
+  .lq-widget-badge {
+    --lqi-badge: var(--lq-success);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--lq-space-2);
+    padding: var(--lq-space-1) var(--lq-space-3);
+    border-radius: var(--lq-radius-pill);
+    background: color-mix(in srgb, var(--lqi-badge) 12%, transparent);
+    color: var(--lq-text);
+    font-size: var(--lq-text-xs);
+    font-weight: 600;
+    line-height: var(--lq-leading-tight);
+  }
+  .lq-widget-badge.is-no {
+    --lqi-badge: var(--lq-danger);
+  }
+  .lq-widget-badge::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: var(--lq-radius-pill);
+    background: var(--lqi-badge);
+  }
+
+  .lq-widget-values {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: var(--lq-space-1) var(--lq-space-4);
+    margin: 0;
+  }
+  .lq-widget-values > div {
+    display: contents;
+  }
+  .lq-widget-values dt {
+    color: var(--lq-text-muted);
+  }
+  .lq-widget-values dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}

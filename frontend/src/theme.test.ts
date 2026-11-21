@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadThemeFonts } from "./fonts";
-import css from "./styles.css?raw";
-import { applyAppearance, contrast, CUSTOM_ATTR, effectiveScheme, parseColor, resolveTheme, resolveThemeId, systemDark } from "./theme";
+import { applyAppearance, contrast, CUSTOM_ATTR, parseColor, resolveTheme, resolveThemeId, systemDark } from "./theme";
 import { THEME_TOKENS, THEMES, type ThemeId } from "./themes";
 
 vi.mock("./fonts", () => ({ loadThemeFonts: vi.fn(async () => {}) }));
@@ -179,78 +178,68 @@ describe("brand palettes (R25) and derived contrast", () => {
   });
 });
 
-describe("styles.css cascade", () => {
-  // jsdom cascades and inherits custom properties, so the real stylesheet can be checked.
-  function mount(mode: "light" | "dark") {
+describe("token cascade", () => {
+  // jsdom cascades and inherits custom properties, so what the app root reads can be checked:
+  // applyAppearance sets the brand on <html> inline and the theme rule matches <html> too.
+  function mount(theme?: ThemeId) {
     const style = document.createElement("style");
-    style.textContent = css;
+    if (theme) style.textContent = THEME_RULES[theme];
     document.head.appendChild(style);
     const root = document.createElement("div");
     root.className = "lq-root";
-    root.setAttribute("data-mode", mode);
     document.body.appendChild(root);
     const get = (name: string) => getComputedStyle(root).getPropertyValue(name).trim();
     return { get, done: () => (style.remove(), root.remove()) };
   }
   const darkConfig = { accent: "#7dd3fc", background: "#111111", text: "#eeeeee" };
 
-  it("configured colors persist in dark mode", () => {
+  it("configured colors persist in a dark theme", () => {
     applyBrand(darkConfig, undefined, "midnight");
-    const resolved = { vars: resolveTheme(darkConfig).legacy };
-    const { get, done } = mount("dark");
+    const { vars } = resolveTheme(darkConfig);
+    const { get, done } = mount("midnight");
     try {
-      expect(get("--lq-background")).toBe("#111111");
+      expect(get("--lq-bg")).toBe("#111111");
       expect(get("--lq-text")).toBe("#eeeeee");
-      expect(get("--lq-surface")).toBe(resolved.vars["--lq-surface"]);
-      expect(get("--lq-muted")).toBe(resolved.vars["--lq-muted"]);
-      expect(get("--lq-elevated")).toBe(resolved.vars["--lq-elevated"]);
-      expect(get("--lq-on-accent")).toBe("#111111");
+      expect(get("--lq-surface")).toBe(vars["--lq-surface"]);
+      expect(get("--lq-text-muted")).toBe(vars["--lq-text-muted"]);
+      expect(get("--lq-surface-raised")).toBe(vars["--lq-surface-raised"]);
+      expect(get("--lq-accent-text")).toBe("#111111");
     } finally {
       done();
     }
   });
 
-  it("a dark config in light mode gets no white elevated surface", () => {
+  it("a dark config in a light theme gets no white raised surface", () => {
     applyBrand(darkConfig);
-    const resolved = { vars: resolveTheme(darkConfig).legacy };
-    const { get, done } = mount("light");
+    const { vars } = resolveTheme(darkConfig);
+    const { get, done } = mount("graphite");
     try {
-      expect(get("--lq-elevated")).toBe(resolved.vars["--lq-elevated"]);
-      expect(contrast(parseColor(get("--lq-text"))!, parseColor(get("--lq-elevated"))!)).toBeGreaterThanOrEqual(4.5);
+      expect(get("--lq-surface-raised")).toBe(vars["--lq-surface-raised"]);
+      expect(contrast(parseColor(get("--lq-text"))!, parseColor(get("--lq-surface-raised"))!)).toBeGreaterThanOrEqual(4.5);
     } finally {
       done();
     }
   });
 
-  // interim: removed in Task 6 with styles.css. The legacy names alias the theme tokens, so
-  // without a brand background the conversation follows the active theme.
-  function mountTheme(theme: ThemeId, mode: "light" | "dark") {
-    const themeStyle = document.createElement("style");
-    themeStyle.textContent = THEME_RULES[theme];
-    document.head.appendChild(themeStyle);
-    const m = mount(mode);
-    return { get: m.get, done: () => (m.done(), themeStyle.remove()) };
-  }
-
-  it("without a configured background the legacy names follow the theme", () => {
+  it("without a configured background the tokens follow the theme", () => {
     applyBrand({ text: "#222222" }, undefined, "midnight");
-    const { get, done } = mountTheme("midnight", "dark");
+    const { get, done } = mount("midnight");
     try {
-      expect(get("--lq-background")).toBe(THEME_TOKENS.midnight.bg);
+      expect(get("--lq-bg")).toBe(THEME_TOKENS.midnight.bg);
       expect(get("--lq-text")).toBe(THEME_TOKENS.midnight.text);
-      expect(get("--lq-muted")).toBe(THEME_TOKENS.midnight["text-muted"]);
-      expect(get("--lq-elevated")).toBe(THEME_TOKENS.midnight["surface-raised"]);
+      expect(get("--lq-text-muted")).toBe(THEME_TOKENS.midnight["text-muted"]);
+      expect(get("--lq-surface-raised")).toBe(THEME_TOKENS.midnight["surface-raised"]);
     } finally {
       done();
     }
   });
 
-  it("defaults: the legacy names take the light theme's values", () => {
+  it("defaults: the tokens take the light theme's values", () => {
     applyBrand({});
-    const { get, done } = mountTheme("graphite", "light");
+    const { get, done } = mount("graphite");
     try {
-      expect(get("--lq-elevated")).toBe(THEME_TOKENS.graphite["surface-raised"]);
-      expect(get("--lq-on-accent")).toBe(THEME_TOKENS.graphite["accent-text"]);
+      expect(get("--lq-surface-raised")).toBe(THEME_TOKENS.graphite["surface-raised"]);
+      expect(get("--lq-accent-text")).toBe(THEME_TOKENS.graphite["accent-text"]);
     } finally {
       done();
     }
@@ -345,10 +334,11 @@ describe("applyAppearance", () => {
       expect(el().getAttribute(CUSTOM_ATTR)).toBe("background surface text muted");
       // The brand palette fixes the scheme: a light brand background reads as light.
       expect(el().getAttribute("data-lq-scheme")).toBe("light");
-      expect(effectiveScheme(theme, brand)).toBe("light");
     }
-    expect(effectiveScheme("graphite", { background: "#111111" })).toBe("dark");
-    expect(effectiveScheme("midnight", { text: "#222" })).toBe("dark");
+    applyAppearance({ theme: "graphite" }, { background: "#111111" });
+    expect(el().getAttribute("data-lq-scheme")).toBe("dark");
+    applyAppearance({ theme: "midnight" }, { text: "#222" });
+    expect(el().getAttribute("data-lq-scheme")).toBe("dark");
   });
 
   it("a user accent applies over the brand accent", () => {
@@ -356,8 +346,6 @@ describe("applyAppearance", () => {
     expect(v("--lq-accent")).toBe("#facc15");
     expect(v("--lq-accent-text")).toBe("#111111");
     expect(v("--lq-accent-hover")).toContain("#facc15");
-    // interim: the legacy stylesheet's on-accent follows the effective accent.
-    expect(v("--lq-on-accent")).toBe("#111111");
   });
 
   it("locked accent overrides user accent and its derived tokens", () => {

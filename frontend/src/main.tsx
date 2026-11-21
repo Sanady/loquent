@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 // Cascade order: the layer statement first, then scale tokens, themes and components (all
-// layered). Third-party and legacy CSS below is unlayered.
+// layered). Third-party CSS below is unlayered.
 import "./styles/layers.css";
 import "./styles/tokens.css";
 import "./styles/themes/graphite.css";
@@ -15,10 +15,15 @@ import "./styles/components/composer.css";
 import "./styles/components/empty.css";
 import "./styles/components/login.css";
 import "./styles/components/drawer.css";
+import "./styles/components/message.css";
+import "./styles/components/markdown.css";
+import "./styles/components/code.css";
+import "./styles/components/activity.css";
+import "./styles/components/widget.css";
+import "./styles/components/error.css";
+import "./styles/components/attachment.css";
+// KaTeX's CSS is functional (math layout and fonts), so it stays as shipped.
 import "katex/dist/katex.min.css";
-import "highlight.js/styles/github.css";
-// interim: removed in Task 6. Legacy conversation styles, until they move onto the tokens.
-import "./styles.css";
 import { App } from "./App";
 
 createRoot(document.getElementById("root")!).render(

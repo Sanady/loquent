@@ -1,0 +1,161 @@
+@layer lq.components {
+  /* Steps and tool calls: compact pill cards (radius-pill, a hairline border) led by a status
+   * dot: accent while running, success when done, danger on error. Opening one turns the pill
+   * into a full-width card that shows the arguments and result in the mono face. */
+
+  :root {
+    /* Pill fill and the dot's halo; themes tune both (lq.themes). */
+    --lqi-activity-bg: var(--lq-surface);
+    --lqi-dot-glow: 0 0 0 0 transparent;
+  }
+
+  [data-lq-part~="activity"] {
+    --lqi-dot: var(--lq-success);
+    align-self: flex-start;
+    max-width: 100%;
+    border: 1px solid var(--lq-border);
+    border-radius: var(--lq-radius-pill);
+    background: var(--lqi-activity-bg);
+    color: var(--lq-text-muted);
+    font-size: var(--lq-text-sm);
+    line-height: var(--lq-leading-tight);
+  }
+  [data-lq-part~="activity"][data-lq-state="running"] {
+    --lqi-dot: var(--lq-accent);
+  }
+  [data-lq-part~="activity"][data-lq-state="error"] {
+    --lqi-dot: var(--lq-danger);
+  }
+
+  /* Consecutive rows read as one cluster. */
+  [data-lq-part~="activity"] + [data-lq-part~="activity"] {
+    margin-top: calc(var(--lq-space-2) - var(--lq-space-6));
+  }
+
+  .lq-activity-head {
+    display: flex;
+    align-items: center;
+    gap: var(--lq-space-2);
+    width: 100%;
+    min-height: 30px;
+    padding: var(--lq-space-1) var(--lq-space-2) var(--lq-space-1) var(--lq-space-3);
+    border: 0;
+    border-radius: inherit;
+    background: none;
+    color: inherit;
+    text-align: left;
+    transition: color var(--lq-duration-fast) var(--lq-ease);
+  }
+  .lq-activity-head:hover {
+    color: var(--lq-text);
+  }
+
+  .lq-activity-dot {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: var(--lq-radius-pill);
+    background: currentColor;
+    color: var(--lqi-dot);
+    box-shadow: var(--lqi-dot-glow);
+  }
+  [data-lq-state="running"] > .lq-activity-head .lq-activity-dot {
+    animation: lq-dot-pulse 1.4s var(--lq-ease) infinite;
+  }
+
+  .lq-activity-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-lq-part~="activity-tool"] .lq-activity-label {
+    font-family: var(--lq-font-mono);
+    font-size: var(--lq-text-xs);
+  }
+
+  .lq-activity-chevron {
+    display: grid;
+    flex: none;
+    place-items: center;
+    color: var(--lq-text-subtle);
+    transition: transform var(--lq-duration-normal) var(--lq-ease);
+  }
+  .lq-activity-head[aria-expanded="true"] .lq-activity-chevron {
+    transform: rotate(90deg);
+  }
+
+  /* ---------- open ---------- */
+
+  [data-lq-part~="activity"].is-open {
+    align-self: stretch;
+    border-radius: var(--lq-radius-lg);
+    background: var(--lq-surface);
+  }
+  [data-lq-part~="activity"].is-open .lq-activity-head {
+    padding-left: var(--lq-space-4);
+    color: var(--lq-text);
+  }
+  [data-lq-part~="activity"].is-open .lq-activity-label {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .lq-activity-body {
+    display: grid;
+    gap: var(--lq-space-3);
+    padding: var(--lq-space-3) var(--lq-space-4) var(--lq-space-4);
+    border-top: 1px solid var(--lq-border);
+    animation: lq-enter-fade var(--lq-duration-normal) var(--lq-ease);
+  }
+  .lq-activity-note {
+    margin: 0;
+    color: var(--lq-text-muted);
+  }
+
+  .lq-io {
+    display: grid;
+    gap: var(--lq-space-1);
+    min-width: 0;
+  }
+  .lq-io-label {
+    color: var(--lq-text-muted);
+    font-size: var(--lq-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .lq-io pre {
+    max-height: 320px;
+    margin: 0;
+    padding: var(--lq-space-3);
+    overflow: auto;
+    border: 1px solid var(--lq-border);
+    border-radius: var(--lq-radius-md);
+    background: var(--lq-code-bg);
+    color: var(--lq-text);
+    font-family: var(--lq-font-mono);
+    font-size: var(--lq-text-xs);
+    line-height: var(--lq-leading-normal);
+    font-variant-ligatures: none;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  @keyframes lq-dot-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-lq-state="running"] > .lq-activity-head .lq-activity-dot,
+    .lq-activity-body {
+      animation: none;
+    }
+  }
+}

@@ -16,7 +16,7 @@ import { COLOR_TOKENS, THEME_SCHEME, THEME_TOKENS, THEMES, type ColorToken, type
  */
 export const THEME_KEYS = ["accent", "background", "surface", "text", "muted", "radius", "font"] as const;
 
-/** Palette keys that have a built-in dark value (styles.css gates those overrides per key). */
+/** The brand palette keys: with `background` set, all four are brand-fixed in every theme (R25). */
 export const PALETTE_KEYS = ["background", "surface", "text", "muted"] as const;
 
 /** Attribute on <html> listing the palette keys that are brand-fixed (R25). */
@@ -172,12 +172,6 @@ function warnBelowFloor(key: string, value: string, background: string, ratio: n
 export interface ResolvedTheme {
   /** Theme tokens (`--lq-<token>`) the brand sets for the requested scheme. */
   vars: Record<string, string>;
-  /**
-   * interim: removed in Task 6 with styles.css. The same brand under the old variable names
-   * the legacy stylesheet reads (--lq-background, --lq-muted, --lq-on-accent, --lq-elevated,
-   * --lq-radius, --lq-font, plus the shared --lq-accent, --lq-surface and --lq-text).
-   */
-  legacy: Record<string, string>;
   /** Palette keys that are brand-fixed in every theme. */
   custom: string[];
   /** The scheme a brand palette implies (from its background), or null when the theme's applies. */
@@ -217,29 +211,22 @@ function accentFamily(accent: string): Record<string, string> {
  */
 export function resolveTheme(theme: Record<string, string> | null | undefined, themeScheme: ColorMode = "light"): ResolvedTheme {
   const vars: Record<string, string> = {};
-  const legacy: Record<string, string> = {};
   const val = (k: string) => {
     const v = theme?.[k];
     return typeof v === "string" && v.trim() ? v.trim() : null;
   };
-  for (const key of THEME_KEYS) {
-    const v = val(key);
-    if (v) legacy[`--lq-${key}`] = v;
-  }
-
   const radius = val("radius");
   if (radius) for (const [name, f] of Object.entries(RADIUS_SCALE)) vars[name] = f === 1 ? radius : `calc(${radius} * ${f})`;
   const font = val("font");
   if (font) vars["--lq-font-body"] = font;
   const accent = val("accent");
   if (accent) Object.assign(vars, accentFamily(accent));
-  if (vars["--lq-accent-text"]) legacy["--lq-on-accent"] = vars["--lq-accent-text"];
 
   const background = val("background");
   if (!background) {
     const palette = { "--lq-surface": val("surface"), "--lq-text": val("text"), "--lq-text-muted": val("muted") };
     if (themeScheme === "light") for (const [name, v] of Object.entries(palette)) if (v) vars[name] = v;
-    return { vars, legacy, custom: [], scheme: null };
+    return { vars, custom: [], scheme: null };
   }
 
   const bg = resolveColor(background);
@@ -327,18 +314,7 @@ export function resolveTheme(theme: Record<string, string> | null | undefined, t
       ? toHex(subtleTargets.length ? withFloor(mixRgb(mutedRgb, bg, 0.8), subtleTargets, 3) : mixRgb(mutedRgb, bg, 0.8))
       : "color-mix(in srgb, var(--lq-text-muted) 80%, var(--lq-bg))";
 
-  // interim: removed in Task 6 with styles.css (old names of the derived palette).
-  legacy["--lq-text"] = text;
-  legacy["--lq-muted"] = muted;
-  legacy["--lq-surface"] = vars["--lq-surface"];
-  legacy["--lq-elevated"] = vars["--lq-surface-raised"];
-
-  return { vars, legacy, custom: [...PALETTE_KEYS], scheme: bg ? (dark ? "dark" : "light") : null };
-}
-
-/** The scheme the page shows: a brand background's (R25), else the theme's. */
-export function effectiveScheme(theme: ThemeId, brand: Record<string, string> | null | undefined): ColorMode {
-  return resolveTheme(brand).scheme ?? THEME_SCHEME[theme];
+  return { vars, custom: [...PALETTE_KEYS], scheme: bg ? (dark ? "dark" : "light") : null };
 }
 
 // ---------- appearance ----------
@@ -346,11 +322,8 @@ export function effectiveScheme(theme: ThemeId, brand: Record<string, string> | 
 const isThemeId = (v: unknown): v is ThemeId => typeof v === "string" && (THEMES as readonly string[]).includes(v);
 const isColorToken = (v: unknown): v is ColorToken => typeof v === "string" && (COLOR_TOKENS as readonly string[]).includes(v);
 
-/** interim: removed in Task 6 with styles.css. Old variable names only the legacy stylesheet reads. */
-const LEGACY_ONLY = ["--lq-background", "--lq-muted", "--lq-radius", "--lq-font", "--lq-on-accent", "--lq-elevated"];
-
 /** Every inline property applyAppearance owns; each call clears the ones it no longer sets. */
-const MANAGED = [...COLOR_TOKENS.map((t) => `--lq-${t}`), ...Object.keys(RADIUS_SCALE), "--lq-font-body", ...LEGACY_ONLY];
+const MANAGED = [...COLOR_TOKENS.map((t) => `--lq-${t}`), ...Object.keys(RADIUS_SCALE), "--lq-font-body"];
 
 export interface Appearance {
   theme: ThemeId;
@@ -398,13 +371,6 @@ export function applyAppearance(
       out[name] = resolved.vars[name] ?? THEME_TOKENS[theme][t];
     }
   }
-
-  // interim: removed in Task 6 with styles.css. The legacy stylesheet reads the old names.
-  for (const name of LEGACY_ONLY) {
-    const v = resolved.legacy[name];
-    if (v) out[name] = v;
-  }
-  if (out["--lq-accent-text"]) out["--lq-on-accent"] = out["--lq-accent-text"];
 
   for (const name of MANAGED) el.style.removeProperty(name);
   for (const [name, v] of Object.entries(out)) el.style.setProperty(name, v, locked.has(name) ? "important" : "");

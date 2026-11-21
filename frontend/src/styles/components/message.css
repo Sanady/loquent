@@ -1,0 +1,217 @@
+@layer lq.components {
+  /* The conversation log and its messages. Message text sits at text-base / leading-normal in
+   * the content-width column (.lq-column, shell.css). The user's turn is a quiet user-bubble
+   * card with one tighter corner toward the speaker; the assistant's reply is unboxed text.
+   * Message actions stay out of the way until the row is hovered or holds focus. */
+
+  /* The effective scheme for native controls and scrollbars. It follows data-lq-scheme, which
+   * a brand background can fix against the theme's (R25). Set on the app root, so it beats the
+   * theme's own color-scheme on <html> by inheritance rather than by layer. */
+  [data-lq-scheme="light"] .lq-root {
+    color-scheme: light;
+  }
+  [data-lq-scheme="dark"] .lq-root {
+    color-scheme: dark;
+  }
+
+  .lq-log {
+    display: flex;
+    flex-direction: column;
+    gap: var(--lq-space-6);
+    padding: var(--lq-space-6) 0 var(--lq-space-8);
+  }
+  .lq-log > * {
+    animation: lq-enter var(--lq-duration-normal) var(--lq-ease) both;
+  }
+
+  /* ---------- user ---------- */
+
+  [data-lq-part~="message"][data-lq-role="user"] {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    align-self: flex-end;
+    gap: var(--lq-space-2);
+    max-width: 78%;
+  }
+
+  [data-lq-part~="message-user"] {
+    padding: calc(var(--lq-space-2) + var(--lq-space-1) / 2) var(--lq-space-4);
+    border-radius: var(--lq-radius-lg) var(--lq-radius-lg) var(--lq-radius-sm) var(--lq-radius-lg);
+    background: var(--lq-user-bubble);
+    color: var(--lq-user-bubble-text);
+    font-size: var(--lq-text-base);
+    line-height: var(--lq-leading-normal);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  /* ---------- assistant ---------- */
+
+  [data-lq-part~="message"][data-lq-role="assistant"] {
+    align-self: stretch;
+    min-width: 0;
+  }
+  [data-lq-part~="message"][data-lq-role="assistant"] > .lq-chips {
+    margin-bottom: var(--lq-space-3);
+  }
+
+  [data-lq-part~="message-assistant"] {
+    font-size: var(--lq-text-base);
+    line-height: var(--lq-leading-normal);
+  }
+
+  /* Streaming caret: a slim accent bar after the last block of the reply. */
+  [data-lq-state="streaming"] .lq-md > :is(p, h1, h2, h3, h4, h5, h6):last-child::after,
+  [data-lq-state="streaming"] .lq-md > :is(ul, ol):last-child > li:last-child::after {
+    content: "";
+    display: inline-block;
+    width: 0.5em;
+    height: 1.1em;
+    margin-left: var(--lq-space-1);
+    border-radius: var(--lq-radius-sm);
+    background: var(--lq-accent);
+    vertical-align: -0.18em;
+    animation: lq-caret 1s steps(2, start) infinite;
+  }
+
+  .lq-typing {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--lq-space-1);
+    height: calc(var(--lq-text-base) * var(--lq-leading-normal));
+  }
+  .lq-typing > span:not(.lq-sr) {
+    width: 6px;
+    height: 6px;
+    border-radius: var(--lq-radius-pill);
+    background: var(--lq-text-muted);
+    animation: lq-typing 1.2s var(--lq-ease) infinite;
+  }
+  .lq-typing > span:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+  .lq-typing > span:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+
+  /* ---------- actions ---------- */
+
+  [data-lq-part~="message-actions"] {
+    display: flex;
+    gap: var(--lq-space-1);
+    /* Pulled in at the bottom too, so the reserved row does not open a wide gap. */
+    margin: var(--lq-space-1) 0 calc(-1 * var(--lq-space-2)) calc(-1 * var(--lq-space-2));
+    opacity: 0;
+    transition: opacity var(--lq-duration-normal) var(--lq-ease);
+  }
+  [data-lq-part~="message"]:hover > [data-lq-part~="message-actions"],
+  [data-lq-part~="message-actions"]:focus-within {
+    opacity: 1;
+  }
+  /* Touch screens have no hover: keep the actions in view. */
+  @media (hover: none) {
+    [data-lq-part~="message-actions"] {
+      opacity: 1;
+    }
+  }
+
+  .lq-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--lq-space-1);
+    min-width: 28px;
+    height: 28px;
+    padding: 0 var(--lq-space-1);
+    border: 0;
+    border-radius: var(--lq-radius-md);
+    background: transparent;
+    color: var(--lq-text-muted);
+    transition:
+      background-color var(--lq-duration-fast) var(--lq-ease),
+      color var(--lq-duration-fast) var(--lq-ease);
+  }
+  .lq-action:hover {
+    background: var(--lqi-hover);
+    color: var(--lq-text);
+  }
+  .lq-action-compact {
+    height: 24px;
+    padding: 0 var(--lq-space-2);
+    border-radius: var(--lq-radius-sm);
+    font-family: var(--lq-font-body);
+    font-size: var(--lq-text-xs);
+    font-weight: 500;
+  }
+
+  /* ---------- run notes ---------- */
+
+  .lq-run-note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--lq-space-1) var(--lq-space-3);
+    color: var(--lq-text-muted);
+    font-size: var(--lq-text-sm);
+  }
+  .lq-run-note .lq-btn {
+    height: 28px;
+    padding: 0 var(--lq-space-3);
+    border-color: var(--lq-border);
+    background: var(--lq-surface);
+    box-shadow: var(--lq-shadow-1);
+  }
+
+  /* "Stopped": a quiet marker across the column, like a rule with a label. */
+  .lq-run-note-quiet {
+    flex-wrap: nowrap;
+    color: var(--lq-text-subtle);
+    font-size: var(--lq-text-xs);
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .lq-run-note-quiet::before,
+  .lq-run-note-quiet::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--lq-border);
+  }
+
+  @keyframes lq-caret {
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes lq-typing {
+    0%,
+    100% {
+      opacity: 0.3;
+      transform: translateY(0);
+    }
+    40% {
+      opacity: 0.9;
+      transform: translateY(-3px);
+    }
+  }
+
+  @media (max-width: 720px) {
+    .lq-log {
+      gap: var(--lq-space-5);
+      padding-top: var(--lq-space-4);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lq-log > *,
+    .lq-typing > span:not(.lq-sr) {
+      animation: none;
+    }
+    [data-lq-state="streaming"] .lq-md > :is(p, h1, h2, h3, h4, h5, h6):last-child::after,
+    [data-lq-state="streaming"] .lq-md > :is(ul, ol):last-child > li:last-child::after {
+      animation: none;
+    }
+  }
+}

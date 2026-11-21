@@ -132,16 +132,14 @@ describe("App", () => {
     vi.mocked(loadThemeFonts).mockClear();
     const { container } = await renderApp(defaultConfig({ default_theme: "graphite", themes: ["graphite", "midnight", "editorial"] }));
     const html = document.documentElement;
-    const root = container.querySelector(".lq-root")!;
+    expect(container.querySelector(".lq-root")!.hasAttribute("data-mode")).toBe(false);
     expect(html.getAttribute("data-lq-theme")).toBe("graphite");
-    // interim: the legacy stylesheet's dark mode follows the theme's scheme.
-    expect(root.getAttribute("data-mode")).toBe("light");
+    expect(html.getAttribute("data-lq-scheme")).toBe("light");
     expect(loadThemeFonts).toHaveBeenLastCalledWith("graphite");
 
     fireEvent.click(screen.getByRole("button", { name: "Theme: Graphite" }));
     expect(html.getAttribute("data-lq-theme")).toBe("midnight");
     expect(html.getAttribute("data-lq-scheme")).toBe("dark");
-    expect(root.getAttribute("data-mode")).toBe("dark");
     expect(loadThemeFonts).toHaveBeenLastCalledWith("midnight");
 
     fireEvent.click(screen.getByRole("button", { name: "Theme: Midnight" }));
@@ -170,13 +168,14 @@ describe("App", () => {
   });
 
   it("a brand background fixes the scheme in every theme (R25)", async () => {
-    const { container } = await renderApp(defaultConfig({ default_theme: "graphite", theme: { background: "#111111", text: "#eeeeee" } }));
-    const root = container.querySelector(".lq-root")!;
-    expect(root.getAttribute("data-mode")).toBe("dark");
+    await renderApp(defaultConfig({ default_theme: "graphite", theme: { background: "#111111", text: "#eeeeee" } }));
+    const html = document.documentElement;
+    expect(html.getAttribute("data-lq-theme")).toBe("graphite");
+    expect(html.getAttribute("data-lq-scheme")).toBe("dark");
     expect(document.documentElement.getAttribute("data-lq-custom-colors")).toBe("background surface text muted");
     fireEvent.click(screen.getByRole("button", { name: /^theme:/i }));
     expect(document.documentElement.getAttribute("data-lq-theme")).toBe("graphite-dark");
-    expect(root.getAttribute("data-mode")).toBe("dark");
+    expect(html.getAttribute("data-lq-scheme")).toBe("dark");
     expect(document.documentElement.style.getPropertyValue("--lq-bg")).toBe("#111111");
   });
 

@@ -105,6 +105,20 @@ describe("themes", () => {
     }
   });
 
+  it("syntax colors hold AA on code-bg in every theme", () => {
+    const roles = ["keyword", "string", "number", "title", "type", "meta", "comment"];
+    for (const id of THEMES) {
+      const body = ruleBody(THEME_CSS[id], `[data-lq-theme="${id}"]`);
+      const syntax = new Map([...body.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/--lqi-syntax-([a-z]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+      expect([...syntax.keys()].sort(), id).toEqual([...roles].sort());
+      for (const [role, value] of syntax) {
+        expect(value, `${id} syntax-${role}`).toMatch(/^#[0-9a-f]{6}$/);
+        const ratio = contrast(parseColor(value)!, solid(id, "code-bg"));
+        expect(ratio, `${id}: syntax-${role} on code-bg = ${ratio.toFixed(2)}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
   it("THEME_SCHEME is light for graphite and editorial, dark for graphite-dark and midnight", () => {
     expect(THEME_SCHEME).toEqual({
       graphite: "light",
