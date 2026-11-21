@@ -23,10 +23,11 @@ npm --prefix frontend test -- --run   # frontend unit tests (vitest)
 npm --prefix frontend run e2e         # builds the UI, then runs Playwright
 ```
 
-The MongoDB contract tests run against a real server when you point them at one:
+The MongoDB contract tests need a real server, so running them locally needs Docker. Without
+`LOQUENT_TEST_MONGO_URL` they are skipped locally (and fail under `CI`):
 
 ```bash
-docker run -p 27017:27017 mongo:8.0
+docker run -d -p 27017:27017 mongo:8.0
 LOQUENT_TEST_MONGO_URL=mongodb://localhost:27017 uv run pytest -q -m mongo
 ```
 

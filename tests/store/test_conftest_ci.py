@@ -44,6 +44,24 @@ def test_mongo_fixture_skips_without_ci(pytester, monkeypatch):
     res.assert_outcomes(skipped=1)
 
 
+def test_missing_url_fails_under_ci(pytester, monkeypatch):
+    monkeypatch.setenv("CI", "true")
+    monkeypatch.delenv("LOQUENT_TEST_MONGO_URL", raising=False)
+    _setup(pytester)
+    res = pytester.runpytest("-k", "mongo")
+    res.assert_outcomes(errors=1, skipped=0, failed=0)
+    assert "LOQUENT_TEST_MONGO_URL" in res.stdout.str()
+
+
+def test_missing_url_skips_locally_with_reason(pytester, monkeypatch):
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("LOQUENT_TEST_MONGO_URL", raising=False)
+    _setup(pytester)
+    res = pytester.runpytest("-k", "mongo", "-rs")
+    res.assert_outcomes(skipped=1)
+    assert "docker run -p 27017:27017 mongo:8.0" in res.stdout.str()
+
+
 def test_ping_timeout_env_is_honoured(pytester, monkeypatch):
     monkeypatch.setenv("CI", "true")
     monkeypatch.setenv("LOQUENT_TEST_MONGO_TIMEOUT_S", "0.2")

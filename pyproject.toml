@@ -58,7 +58,7 @@ loquent = "loquent.cli:main"
 
 [project.optional-dependencies]
 mongo = [
-    "pymongo>=4.9",
+    "pymongo>=4.18.3",
 ]
 
 [dependency-groups]
@@ -67,8 +67,7 @@ dev = [
     "pytest-asyncio",
     "ruff",
     "fastapi",
-    "pymongo-inmemory>=0.5.0",
-    "pymongo>=4.9,<4.10",  # pymongo-inmemory ships mongod <=4.0; newer pymongo needs >=4.4
+    "pymongo>=4.18.3",
 ]
 
 [build-system]
