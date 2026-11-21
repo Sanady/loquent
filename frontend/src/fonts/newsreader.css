@@ -1,4 +1,4 @@
-/* Newsreader Variable: latin and latin-ext subsets only (SIL OFL 1.1, see THIRD_PARTY_LICENSES.md). */
+/* Derived from @fontsource-variable/newsreader/wght.css (latin + latin-ext only). Re-sync on version bumps; fonts-drift test enforces this. (SIL OFL 1.1, see THIRD_PARTY_LICENSES.md) */
 @font-face {
   font-family: "Newsreader Variable";
   font-style: normal;

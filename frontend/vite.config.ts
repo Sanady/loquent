@@ -5,6 +5,9 @@ import react from "@vitejs/plugin-react";
 /** Our own stylesheets under src/ (never anything in node_modules). */
 const OWN_CSS = /^(?!.*\/node_modules\/).*\/src\/(?:styles\.css|styles\/.+\.css|fonts\/.+\.css)/;
 
+/** Fontsource wght.css, read (?raw) only by fonts-drift.test.ts to compare against src/fonts/*.css. */
+const FONTSOURCE_CSS = /\/node_modules\/@fontsource-variable\/[^/]+\/wght\.css/;
+
 export default defineConfig({
   base: "./",
   plugins: [react()],
@@ -15,5 +18,5 @@ export default defineConfig({
   // to check tokens and the custom-property cascade; vitest blanks any CSS not listed here. OWN_CSS is
   // anchored to src/ and excludes node_modules (e.g. highlight.js/styles/*.css) so only our CSS is processed.
   // include: keep Playwright specs in e2e/ out of vitest.
-  test: { include: ["src/**/*.test.{ts,tsx}"], environment: "jsdom", globals: false, setupFiles: ["src/test/setup.ts"], css: { include: [OWN_CSS] } },
+  test: { include: ["src/**/*.test.{ts,tsx}"], environment: "jsdom", globals: false, setupFiles: ["src/test/setup.ts"], css: { include: [OWN_CSS, FONTSOURCE_CSS] } },
 });

@@ -14,6 +14,10 @@ unmodified apart from the format conversion and subsetting done by the Fontsourc
 | Geist | @fontsource-variable/geist | 5.3.0 | Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font) |
 | JetBrains Mono | @fontsource-variable/jetbrains-mono | 5.3.0 | Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono) |
 
+The subset stylesheets in `frontend/src/fonts/*.css` are derived from Fontsource's own
+`wght.css` files (also OFL-licensed), reduced to the latin and latin-ext subsets; a test
+(`fonts-drift.test.ts`) keeps them in sync with the installed packages.
+
 Each package ships its notice as `LICENSE` at the package root; the licence text is identical
 for all four apart from the copyright line. Full text (also at https://openfontlicense.org):
 
