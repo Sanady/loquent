@@ -4,16 +4,6 @@
    * card with one tighter corner toward the speaker; the assistant's reply is unboxed text.
    * Message actions stay out of the way until the row is hovered or holds focus. */
 
-  /* The effective scheme for native controls and scrollbars. It follows data-lq-scheme, which
-   * a brand background can fix against the theme's (R25). Set on the app root, so it beats the
-   * theme's own color-scheme on <html> by inheritance rather than by layer. */
-  [data-lq-scheme="light"] .lq-root {
-    color-scheme: light;
-  }
-  [data-lq-scheme="dark"] .lq-root {
-    color-scheme: dark;
-  }
-
   .lq-log {
     display: flex;
     flex-direction: column;
@@ -133,7 +123,7 @@
       color var(--lq-duration-fast) var(--lq-ease);
   }
   .lq-action:hover {
-    background: var(--lqi-hover);
+    background: color-mix(in srgb, var(--lq-text) 6%, transparent);
     color: var(--lq-text);
   }
   .lq-action-compact {

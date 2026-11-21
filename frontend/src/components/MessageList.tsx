@@ -31,17 +31,16 @@ function ErrorItem({ item, onRetry }: { item: Extract<Item, { kind: "error" }>; 
 }
 
 /**
- * The greeting: the app name and one line under it. Suggestion chips render only when some are
+ * The greeting: a heading and one line under it. Suggestion chips render only when some are
  * passed; nothing configures them yet, so MessageList passes none.
  */
 export function EmptyState({ suggestions = [] }: { suggestions?: readonly string[] }) {
   const logo = useApp((s) => s.config?.logo_url ?? null);
-  const appName = useApp((s) => s.config?.app_name ?? "");
   const send = useApp((s) => s.send);
   return (
     <div className="lq-empty" {...part("empty-state")}>
       {logo && <img className="lq-empty-logo" src={logo} alt="" />}
-      <h1 className="lq-empty-title">{appName || "How can I help?"}</h1>
+      <h1 className="lq-empty-title">How can I help?</h1>
       <p className="lq-empty-sub">Ask a question or describe what you need.</p>
       {suggestions.length > 0 && (
         <ul className="lq-suggestions" aria-label="Suggestions">

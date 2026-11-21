@@ -3,11 +3,8 @@
    * dot: accent while running, success when done, danger on error. Opening one turns the pill
    * into a full-width card that shows the arguments and result in the mono face. */
 
-  :root {
-    /* Pill fill and the dot's halo; themes tune both (lq.themes). */
-    --lqi-activity-bg: var(--lq-surface);
-    --lqi-dot-glow: 0 0 0 0 transparent;
-  }
+  /* Pill fill (--lqi-activity-bg) and the dot's halo (--lqi-dot-glow): themes tune both in
+   * lq.themes; the defaults are the fallbacks at each use. */
 
   [data-lq-part~="activity"] {
     --lqi-dot: var(--lq-success);
@@ -15,7 +12,7 @@
     max-width: 100%;
     border: 1px solid var(--lq-border);
     border-radius: var(--lq-radius-pill);
-    background: var(--lqi-activity-bg);
+    background: var(--lqi-activity-bg, var(--lq-surface));
     color: var(--lq-text-muted);
     font-size: var(--lq-text-sm);
     line-height: var(--lq-leading-tight);
@@ -57,7 +54,7 @@
     border-radius: var(--lq-radius-pill);
     background: currentColor;
     color: var(--lqi-dot);
-    box-shadow: var(--lqi-dot-glow);
+    box-shadow: var(--lqi-dot-glow, none);
   }
   [data-lq-state="running"] > .lq-activity-head .lq-activity-dot {
     animation: lq-dot-pulse 1.4s var(--lq-ease) infinite;

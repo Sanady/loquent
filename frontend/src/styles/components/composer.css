@@ -30,7 +30,7 @@
     color: var(--lq-text);
   }
 
-  .lq-composer-box {
+  [data-lq-part~="composer"] {
     padding: var(--lq-space-2) var(--lq-space-2) var(--lq-space-2) var(--lq-space-4);
     border: 1px solid var(--lq-border);
     border-radius: var(--lq-radius-xl);
@@ -40,12 +40,18 @@
       border-color var(--lq-duration-fast) var(--lq-ease),
       box-shadow var(--lq-duration-fast) var(--lq-ease);
   }
-  .lq-composer-box:focus-within {
+  /* Any focus firms the edge to border-strong. The accent ring (and Midnight's glow) is for
+   * keyboard focus only: Composer.tsx sets is-kbd-focus when the box was reached by Tab, since
+   * a textarea matches :focus-visible on every focus. */
+  [data-lq-part~="composer"]:focus-within {
+    border-color: var(--lq-border-strong);
+  }
+  [data-lq-part~="composer"].is-kbd-focus {
     border-color: var(--lq-focus-ring);
     box-shadow:
       var(--lq-shadow-2),
       0 0 0 3px var(--lq-accent-soft),
-      var(--lqi-glow);
+      var(--lqi-glow, 0 0 0 0 transparent);
   }
 
   [data-lq-part~="composer-input"] {
@@ -91,10 +97,10 @@
     margin-left: auto;
     padding: 0;
     border: 0;
-    border-radius: var(--lqi-send-radius);
+    border-radius: var(--lqi-send-radius, var(--lq-radius-md));
     background: var(--lq-accent);
     color: var(--lq-accent-text);
-    box-shadow: var(--lqi-glow);
+    box-shadow: var(--lqi-glow, 0 0 0 0 transparent);
     transition:
       background-color var(--lq-duration-fast) var(--lq-ease),
       box-shadow var(--lq-duration-fast) var(--lq-ease),

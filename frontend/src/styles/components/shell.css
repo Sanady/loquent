@@ -1,27 +1,11 @@
 @layer lq.components {
   /* The app frame: base type and color, layout, shared buttons, focus and the entrance motion.
    *
-   * Component CSS reads tokens only. A few private knobs (--lqi-*) carry per-theme touches; they
-   * default here and each theme file sets its own values in lq.themes, which beats this layer.
-   * They are internal, not part of the styling contract: developer and user CSS should target
-   * the contract tokens (--lq-*) and parts instead. */
-  :root {
-    --lqi-hover: color-mix(in srgb, var(--lq-text) 6%, transparent);
-    /* Header title and app name. */
-    --lqi-title-size: var(--lq-text-base);
-    --lqi-title-tracking: -0.011em;
-    /* Display headings (empty state, sign in). */
-    --lqi-display-weight: 600;
-    --lqi-display-tracking: -0.025em;
-    /* New chat button. */
-    --lqi-new-chat-bg: var(--lq-surface);
-    --lqi-new-chat-text: var(--lq-text);
-    --lqi-new-chat-border: var(--lq-border);
-    --lqi-new-chat-icon: var(--lq-accent);
-    /* Send button shape, and the accent glow (on focus and send) some themes add. */
-    --lqi-send-radius: var(--lq-radius-md);
-    --lqi-glow: 0 0 0 0 transparent;
-  }
+   * Component CSS reads tokens only. A few private knobs (--lqi-*) carry per-theme touches: the
+   * theme files set them in lq.themes, and each use here names its default as a var() fallback.
+   * No knob is defaulted on :root, so a value set on a part (e.g. [data-lq-part~="sidebar"])
+   * reaches that part's descendants. The knobs are internal, not part of the styling contract:
+   * developer and user CSS should target the contract tokens (--lq-*) and parts instead. */
 
   html,
   body {
@@ -42,6 +26,16 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+  }
+
+  /* The effective scheme for native controls and scrollbars. It follows data-lq-scheme, which
+   * a brand background can fix against the theme's (R25). Set on the app root, so it beats the
+   * theme's own color-scheme on <html> by inheritance rather than by layer. */
+  [data-lq-scheme="light"] .lq-root {
+    color-scheme: light;
+  }
+  [data-lq-scheme="dark"] .lq-root {
+    color-scheme: dark;
   }
 
   .lq-root *,
@@ -130,7 +124,7 @@
       color var(--lq-duration-fast) var(--lq-ease);
   }
   .lq-icon-btn:hover {
-    background: var(--lqi-hover);
+    background: color-mix(in srgb, var(--lq-text) 6%, transparent);
     color: var(--lq-text);
   }
   .lq-icon-btn-sm {
@@ -188,7 +182,7 @@
     box-shadow: none;
   }
   .lq-btn-quiet:hover:not(:disabled) {
-    background: var(--lqi-hover);
+    background: color-mix(in srgb, var(--lq-text) 6%, transparent);
   }
   .lq-btn-danger {
     border-color: transparent;

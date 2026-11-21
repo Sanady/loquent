@@ -172,11 +172,10 @@ describe("MessageList", () => {
     expect(screen.getByRole("heading", { level: 1 })).toBeTruthy();
   });
 
-  it("the empty state names the app and shows no suggestions unless given some", () => {
+  it("the empty state greets and shows no suggestions unless given some", () => {
     const store = readyStore({ view: view([]) });
     const { container } = renderList(store);
-    const name = store.getState().config!.app_name;
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(name);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("How can I help?");
     expect(container.querySelector(".lq-empty-sub")?.textContent).toBeTruthy();
     expect(screen.queryByRole("list", { name: "Suggestions" })).toBeNull();
   });

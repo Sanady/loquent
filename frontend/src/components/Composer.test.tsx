@@ -21,6 +21,36 @@ const deferred = <T,>() => {
 };
 
 describe("Composer", () => {
+  it("the composer part is the visible card, and its keyboard ring follows input modality", () => {
+    const store = readyStore();
+    const box = renderComposer(store);
+    const card = box.closest('[data-lq-part~="composer"]')!;
+    expect(card.classList.contains("lq-composer-box")).toBe(true);
+    expect(card.tagName).not.toBe("FORM");
+
+    // Reached by Tab: the ring class is on while focused, off on blur.
+    act(() => box.blur());
+    fireEvent.keyDown(window, { key: "Tab" });
+    act(() => box.focus());
+    expect(card.classList.contains("is-kbd-focus")).toBe(true);
+    act(() => box.blur());
+    expect(card.classList.contains("is-kbd-focus")).toBe(false);
+
+    // A click inside the keyboard-focused box drops the ring.
+    act(() => box.blur());
+    fireEvent.keyDown(window, { key: "Tab" });
+    act(() => box.focus());
+    expect(card.classList.contains("is-kbd-focus")).toBe(true);
+    fireEvent.pointerDown(box);
+    expect(card.classList.contains("is-kbd-focus")).toBe(false);
+
+    // Reached by pointer: no ring.
+    act(() => box.blur());
+    fireEvent.pointerDown(window);
+    act(() => box.focus());
+    expect(card.classList.contains("is-kbd-focus")).toBe(false);
+  });
+
   it("send is disabled without text and enabled with text", () => {
     const store = readyStore();
     const box = renderComposer(store);

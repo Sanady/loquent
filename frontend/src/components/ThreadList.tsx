@@ -176,10 +176,21 @@ export function ThreadList({ id, onNavigate, onClose }: { id: string; onNavigate
   const newThread = useApp((s) => s.newThread);
   const groups = groupThreads(threads);
   const newChatRef = useRef<HTMLButtonElement>(null);
+  const appName = useApp((s) => s.config?.app_name ?? "");
+  const logo = useApp((s) => s.config?.logo_url ?? null);
 
   return (
     <nav id={id} className="lq-sidebar" aria-label="Chats" {...part("sidebar")}>
       <div className="lq-sidebar-top" {...part("sidebar-header")}>
+        <div className="lq-sidebar-brand">
+          {logo && <img src={logo} alt="" className="lq-logo" />}
+          <span className="lq-brand-name">{appName}</span>
+          {onClose && (
+            <button type="button" className="lq-icon-btn" aria-label="Close chats" title="Close" onClick={onClose}>
+              <IconX />
+            </button>
+          )}
+        </div>
         <button ref={newChatRef} type="button" className="lq-new-chat" {...part("new-chat")} onClick={() => {
           newThread();
           onNavigate();
@@ -187,11 +198,6 @@ export function ThreadList({ id, onNavigate, onClose }: { id: string; onNavigate
           <IconPlus />
           New chat
         </button>
-        {onClose && (
-          <button type="button" className="lq-icon-btn" aria-label="Close chats" title="Close" onClick={onClose}>
-            <IconX />
-          </button>
-        )}
       </div>
       <div className="lq-thread-scroll" {...part("thread-list")}>
         {threads.length === 0 ? (

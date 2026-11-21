@@ -37,6 +37,28 @@ export function Composer() {
   }, []);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // The accent focus ring shows only when the box was reached from the keyboard. Text fields
+  // match :focus-visible on every focus (click and the automatic focus included), so CSS alone
+  // can't tell; track the last input modality instead.
+  const keyboard = useRef(false);
+  const [kbdFocus, setKbdFocus] = useState(false);
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Tab") keyboard.current = true;
+    };
+    // A click (even inside the focused box) means the pointer is in use: drop the ring.
+    const onPointer = () => {
+      keyboard.current = false;
+      setKbdFocus(false);
+    };
+    window.addEventListener("keydown", onKey, true);
+    window.addEventListener("pointerdown", onPointer, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("pointerdown", onPointer, true);
+    };
+  }, []);
+
   const busy = starting || running;
   const hasContent = text.trim() !== "" || files.length > 0;
   const canSubmit = !busy && hasContent;
@@ -130,8 +152,8 @@ export function Composer() {
   };
 
   return (
-    <form className="lq-composer" aria-label="Message" onSubmit={onSubmit} {...part("composer")}>
-      <div className="lq-composer-box">
+    <form className="lq-composer" aria-label="Message" onSubmit={onSubmit}>
+      <div className={`lq-composer-box${kbdFocus ? " is-kbd-focus" : ""}`} {...part("composer")}>
         {files.length > 0 && (
           <ul className="lq-pending" aria-label="Files to send">
             {files.map((f, i) => (
@@ -164,6 +186,8 @@ export function Composer() {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
+          onFocus={() => setKbdFocus(keyboard.current)}
+          onBlur={() => setKbdFocus(false)}
         />
         <div className="lq-composer-bar">
           {attachments && (

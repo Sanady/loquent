@@ -1,5 +1,6 @@
 @layer lq.components {
-  /* The top bar: 56px, a hairline under it, the app name in the display face, actions right. */
+  /* The top bar: 56px, a hairline under it, the open thread's title in the display face (the
+   * app name when none is open), actions right. */
 
   [data-lq-part~="header"] {
     display: flex;
@@ -13,9 +14,6 @@
   }
 
   [data-lq-part~="header-title"] {
-    display: flex;
-    align-items: center;
-    gap: var(--lq-space-2);
     min-width: 0;
     padding-left: var(--lq-space-1);
   }
@@ -29,13 +27,14 @@
     border-radius: var(--lq-radius-sm);
   }
 
-  /* The app name, here and on the sign-in card. */
+  /* The header title, and the app name in the sidebar and on the sign-in card. */
+  [data-lq-part~="header-title"],
   .lq-brand-name {
     overflow: hidden;
     font-family: var(--lq-font-display);
-    font-size: var(--lqi-title-size);
+    font-size: var(--lqi-title-size, var(--lq-text-base));
     font-weight: 600;
-    letter-spacing: var(--lqi-title-tracking);
+    letter-spacing: var(--lqi-title-tracking, -0.011em);
     line-height: var(--lq-leading-tight);
     text-overflow: ellipsis;
     white-space: nowrap;

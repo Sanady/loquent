@@ -37,7 +37,7 @@
       box-shadow var(--lq-duration-fast) var(--lq-ease);
   }
   button.lq-chip:hover {
-    border-color: var(--lqi-control-border);
+    border-color: color-mix(in srgb, var(--lq-border-strong) 45%, var(--lq-border));
     box-shadow: var(--lq-shadow-1);
   }
   .lq-chip[aria-busy="true"] {
@@ -94,7 +94,7 @@
     color: var(--lq-text-muted);
   }
   .lq-chip-remove:hover {
-    background: var(--lqi-hover);
+    background: color-mix(in srgb, var(--lq-text) 6%, transparent);
     color: var(--lq-text);
   }
 }

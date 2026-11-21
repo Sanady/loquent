@@ -27,16 +27,30 @@ describe("App", () => {
     expect(container.textContent ?? "").not.toMatch(/loquent/i);
     expect(container.innerHTML).not.toMatch(/loquent/i);
     expect(document.title).not.toMatch(/loquent/i);
-    // The configured name is what the header shows.
+    // With no thread open, the header shows the configured name.
     expect(screen.getByRole("banner").textContent).toContain("Chat");
   });
 
-  it("header shows the configured logo and app name", async () => {
+  it("the sidebar shows the configured logo and app name; the header the open thread's title", async () => {
     await renderApp(defaultConfig({ app_name: "Acme Assistant", logo_url: "branding/logo" }));
-    const banner = screen.getByRole("banner");
-    expect(banner.textContent).toContain("Acme Assistant");
-    expect(banner.querySelector("img")?.getAttribute("src")).toBe("branding/logo");
+    const nav = screen.getByRole("navigation", { name: /chats/i });
+    const brand = nav.querySelector('[data-lq-part~="sidebar-header"]')!;
+    expect(brand.textContent).toContain("Acme Assistant");
+    expect(brand.querySelector("img")?.getAttribute("src")).toBe("branding/logo");
     expect(document.title).toBe("Acme Assistant");
+
+    // No thread open: the header title falls back to the app name.
+    const title = () => screen.getByRole("banner").querySelector('[data-lq-part~="header-title"]')!.textContent;
+    expect(title()).toBe("Acme Assistant");
+    fireEvent.click(await screen.findByRole("button", { name: "Second chat" }));
+    await vi.waitFor(() => expect(title()).toBe("Second chat"));
+  });
+
+  it("with the chat list hidden, the header shows the logo", async () => {
+    await renderApp(defaultConfig({ app_name: "Acme Assistant", logo_url: "branding/logo", hide: ["thread_list"] }));
+    const banner = screen.getByRole("banner");
+    expect(banner.querySelector("img")?.getAttribute("src")).toBe("branding/logo");
+    expect(banner.querySelector('[data-lq-part~="header-title"]')!.textContent).toBe("Acme Assistant");
   });
 
   it("thread list hidden by config", async () => {

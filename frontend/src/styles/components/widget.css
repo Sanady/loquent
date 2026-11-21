@@ -4,14 +4,9 @@
    * accent, the secondary an outline. A confirm lays its question and buttons out on one row
    * when there is room, as in the mockups. */
 
-  :root {
-    --lqi-widget-bg: var(--lq-surface-raised);
-    --lqi-widget-title-font: var(--lq-font-body);
-    --lqi-widget-title-size: var(--lq-text-base);
-    --lqi-widget-title-weight: 600;
-    /* The outline of secondary buttons and fields: firmer than border, softer than border-strong. */
-    --lqi-control-border: color-mix(in srgb, var(--lq-border-strong) 45%, var(--lq-border));
-  }
+  /* Theme knobs (lq.themes): --lqi-widget-bg and --lqi-widget-title-{font,size,weight}; the
+   * defaults are the fallbacks at each use. Secondary buttons and fields are outlined firmer
+   * than border and softer than border-strong (a border-strong / border mix). */
 
   .lq-widget-slot {
     max-width: 600px;
@@ -21,7 +16,7 @@
     padding: var(--lq-space-4) var(--lq-space-5);
     border: 1px solid var(--lq-border);
     border-radius: var(--lq-radius-lg);
-    background: var(--lqi-widget-bg);
+    background: var(--lqi-widget-bg, var(--lq-surface-raised));
     box-shadow: var(--lq-shadow-1);
     color: var(--lq-text);
     font-size: var(--lq-text-sm);
@@ -37,9 +32,9 @@
   .lq-widget-message {
     margin: 0 0 var(--lq-space-3);
     color: var(--lq-text);
-    font-family: var(--lqi-widget-title-font);
-    font-size: var(--lqi-widget-title-size);
-    font-weight: var(--lqi-widget-title-weight);
+    font-family: var(--lqi-widget-title-font, var(--lq-font-body));
+    font-size: var(--lqi-widget-title-size, var(--lq-text-base));
+    font-weight: var(--lqi-widget-title-weight, 600);
     line-height: var(--lq-leading-tight);
     text-wrap: pretty;
   }
@@ -73,12 +68,12 @@
     margin-top: var(--lq-space-4);
   }
   .lq-widget-actions .lq-btn:not(.lq-btn-primary) {
-    border-color: var(--lqi-control-border);
+    border-color: color-mix(in srgb, var(--lq-border-strong) 45%, var(--lq-border));
     background: transparent;
     box-shadow: none;
   }
   .lq-widget-actions .lq-btn:not(.lq-btn-primary):hover:not(:disabled) {
-    background: var(--lqi-hover);
+    background: color-mix(in srgb, var(--lq-text) 6%, transparent);
   }
   .lq-widget-actions .lq-btn-primary {
     box-shadow: var(--lq-shadow-1);
@@ -122,7 +117,7 @@
       background-color var(--lq-duration-fast) var(--lq-ease);
   }
   .lq-widget-option:hover {
-    border-color: var(--lqi-control-border);
+    border-color: color-mix(in srgb, var(--lq-border-strong) 45%, var(--lq-border));
   }
   .lq-widget-option:has(input:checked) {
     border-color: var(--lq-accent);
@@ -160,7 +155,7 @@
     width: 100%;
     height: 36px;
     padding: 0 var(--lq-space-3);
-    border: 1px solid var(--lqi-control-border);
+    border: 1px solid color-mix(in srgb, var(--lq-border-strong) 45%, var(--lq-border));
     border-radius: var(--lq-radius-md);
     background: var(--lq-surface);
     color: var(--lq-text);

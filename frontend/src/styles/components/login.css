@@ -38,8 +38,8 @@
     margin: 0;
     font-family: var(--lq-font-display);
     font-size: var(--lq-text-2xl);
-    font-weight: var(--lqi-display-weight);
-    letter-spacing: var(--lqi-display-tracking);
+    font-weight: var(--lqi-display-weight, 600);
+    letter-spacing: var(--lqi-display-tracking, -0.025em);
     line-height: var(--lq-leading-tight);
   }
 

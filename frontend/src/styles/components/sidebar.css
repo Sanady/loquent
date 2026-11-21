@@ -23,28 +23,39 @@
     height: 100%;
   }
 
-  /* Same height as the header, so New chat sits on the header's line. */
+  /* The brand row above New chat, as in the mockups. The row is 40px under a space-2 top
+   * padding, so the app name sits on the header's centre line. */
   [data-lq-part~="sidebar-header"] {
     display: flex;
     flex: none;
+    flex-direction: column;
+    gap: var(--lq-space-2);
+    padding: var(--lq-space-2) var(--lq-space-3) var(--lq-space-1);
+  }
+  .lq-sidebar-brand {
+    display: flex;
     align-items: center;
     gap: var(--lq-space-2);
-    min-height: 56px;
-    padding: var(--lq-space-2) var(--lq-space-3);
+    min-width: 0;
+    min-height: 40px;
+    padding-left: var(--lq-space-1);
+  }
+  .lq-sidebar-brand .lq-brand-name {
+    flex: 1;
+    min-width: 0;
   }
 
   [data-lq-part~="new-chat"] {
     display: flex;
-    flex: 1;
     align-items: center;
     gap: var(--lq-space-2);
     min-width: 0;
     height: 36px;
     padding: 0 var(--lq-space-3);
-    border: 1px solid var(--lqi-new-chat-border);
+    border: 1px solid var(--lqi-new-chat-border, var(--lq-border));
     border-radius: var(--lq-radius-md);
-    background: var(--lqi-new-chat-bg);
-    color: var(--lqi-new-chat-text);
+    background: var(--lqi-new-chat-bg, var(--lq-surface));
+    color: var(--lqi-new-chat-text, var(--lq-text));
     font-size: var(--lq-text-sm);
     font-weight: 500;
     box-shadow: var(--lq-shadow-1);
@@ -53,10 +64,10 @@
       border-color var(--lq-duration-fast) var(--lq-ease);
   }
   [data-lq-part~="new-chat"]:hover {
-    background: color-mix(in srgb, var(--lqi-new-chat-text) 5%, var(--lqi-new-chat-bg));
+    background: color-mix(in srgb, var(--lqi-new-chat-text, var(--lq-text)) 5%, var(--lqi-new-chat-bg, var(--lq-surface)));
   }
   [data-lq-part~="new-chat"] .lq-icon {
-    color: var(--lqi-new-chat-icon);
+    color: var(--lqi-new-chat-icon, var(--lq-accent));
   }
 
   [data-lq-part~="thread-list"] {
@@ -100,7 +111,7 @@
     transition: background-color var(--lq-duration-fast) var(--lq-ease);
   }
   [data-lq-part~="thread-item"]:hover {
-    background: var(--lqi-hover);
+    background: color-mix(in srgb, var(--lq-text) 6%, transparent);
   }
   [data-lq-part~="thread-item"][data-lq-active="true"] {
     border-color: var(--lq-border);
@@ -142,12 +153,15 @@
   [data-lq-part~="thread-item"][data-lq-active="true"] .lq-thread-actions {
     width: auto;
     padding-right: var(--lq-space-1);
+    /* Revealed: nothing to hide, and clipping would cut the focus ring. */
+    overflow: visible;
     opacity: 1;
   }
   @media (hover: none) {
     .lq-thread-actions {
       width: auto;
       padding-right: var(--lq-space-1);
+      overflow: visible;
       opacity: 1;
     }
   }

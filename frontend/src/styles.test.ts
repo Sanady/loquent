@@ -21,6 +21,34 @@ function withoutVarFallbacks(css: string): string {
   return out;
 }
 
+/** CSS named colors (CSS Color 4). transparent, currentColor, inherit and none stay allowed. */
+const NAMED_COLORS = new Set(
+  (
+    "aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown " +
+    "burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan " +
+    "darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid " +
+    "darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet " +
+    "deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro " +
+    "ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki " +
+    "lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow " +
+    "lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen lightskyblue lightslategray " +
+    "lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine " +
+    "mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise " +
+    "mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab " +
+    "orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru " +
+    "pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown " +
+    "seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan " +
+    "teal thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen"
+  ).split(" "),
+);
+
+/**
+ * The only px allowed in a shadow: the documented focus halo, a 3px accent-soft ring around a
+ * focused field (composer, rename input, widget fields). Every other shadow is a --lq-shadow-*
+ * token or a theme knob.
+ */
+const SHADOW_PX_ALLOWLIST = ["0 0 0 3px var(--lq-accent-soft)"];
+
 /** `property: value` pairs in a CSS text (comments stripped). */
 function declarations(css: string): [string, string][] {
   return [...stripComments(css).matchAll(/(?:^|[;{\s])([a-z-]+)\s*:\s*([^;{}]+);/g)].map((m) => [m[1], m[2].trim()]);
@@ -42,9 +70,18 @@ describe("component css", () => {
     for (const [name, raw] of files()) {
       const css = withoutVarFallbacks(stripComments(raw));
       expect(css, `${name}: hex color`).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
-      expect(css, `${name}: rgb()/hsl() color`).not.toMatch(/\b(?:rgba?|hsla?)\(/);
+      expect(css, `${name}: color function`).not.toMatch(/\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/);
       expect(css, `${name}: !important`).not.toMatch(/!\s*important/);
       for (const [prop, value] of declarations(css)) {
+        // Named colors as values (property names like white-space are not values).
+        if (!prop.startsWith("--")) {
+          const named = (value.replace(/var\(--[\w-]+\)/g, "").match(/[a-z]+/gi) ?? []).filter((w) => NAMED_COLORS.has(w.toLowerCase()));
+          expect(named, `${name}: ${prop}: ${value} uses a named color`).toEqual([]);
+        }
+        if (/^(?:box|text)-shadow$/.test(prop)) {
+          const rest = SHADOW_PX_ALLOWLIST.reduce((v, ok) => v.split(ok).join(""), value);
+          expect(rest, `${name}: ${prop} px outside the focus halo`).not.toMatch(/\dpx\b/);
+        }
         if (/^(?:border-radius|font-size|font-family|font)$/.test(prop)) {
           expect(value, `${name}: ${prop} must use tokens`).not.toMatch(/\d(?:px|em|pt)\b/);
           expect(value, `${name}: ${prop} must use tokens`).toMatch(/var\(--lqi?-|^(?:inherit|0|50%)$/);
