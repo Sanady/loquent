@@ -1,0 +1,223 @@
+@layer lq.components {
+  /* The app frame: base type and color, layout, shared buttons, focus and the entrance motion.
+   *
+   * Component CSS reads tokens only. A few private knobs (--lqi-*) carry per-theme touches; they
+   * default here and each theme file sets its own values in lq.themes, which beats this layer.
+   * They are internal, not part of the styling contract: developer and user CSS should target
+   * the contract tokens (--lq-*) and parts instead. */
+  :root {
+    --lqi-hover: color-mix(in srgb, var(--lq-text) 6%, transparent);
+    /* Header title and app name. */
+    --lqi-title-size: var(--lq-text-base);
+    --lqi-title-tracking: -0.011em;
+    /* Display headings (empty state, sign in). */
+    --lqi-display-weight: 600;
+    --lqi-display-tracking: -0.025em;
+    /* New chat button. */
+    --lqi-new-chat-bg: var(--lq-surface);
+    --lqi-new-chat-text: var(--lq-text);
+    --lqi-new-chat-border: var(--lq-border);
+    --lqi-new-chat-icon: var(--lq-accent);
+    /* Send button shape, and the accent glow (on focus and send) some themes add. */
+    --lqi-send-radius: var(--lq-radius-md);
+    --lqi-glow: 0 0 0 0 transparent;
+  }
+
+  html,
+  body {
+    margin: 0;
+    height: 100%;
+    background: var(--lq-bg);
+  }
+
+  .lq-root {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: var(--lq-bg);
+    color: var(--lq-text);
+    font-family: var(--lq-font-body);
+    font-size: var(--lq-text-base);
+    line-height: var(--lq-leading-normal);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  .lq-root *,
+  .lq-root *::before,
+  .lq-root *::after {
+    box-sizing: border-box;
+  }
+
+  /* Zero specificity, so every component class wins. */
+  :where(.lq-root) :where(button, input, textarea, select) {
+    font: inherit;
+    color: inherit;
+  }
+  :where(.lq-root) :where(button) {
+    cursor: pointer;
+  }
+
+  .lq-root :focus-visible {
+    outline: 2px solid var(--lq-focus-ring);
+    outline-offset: 2px;
+  }
+
+  .lq-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .lq-icon {
+    flex: none;
+    display: block;
+  }
+
+  /* ---------- layout ---------- */
+
+  .lq-layout {
+    display: flex;
+    height: 100%;
+  }
+
+  [data-lq-part~="main"] {
+    position: relative;
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+    background: var(--lq-bg);
+  }
+
+  [data-lq-part~="conversation"] {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable both-edges;
+  }
+
+  .lq-column {
+    width: 100%;
+    max-width: calc(var(--lq-content-width) + 2 * var(--lq-space-6));
+    margin: 0 auto;
+    padding: 0 var(--lq-space-6);
+  }
+
+  /* ---------- buttons ---------- */
+
+  .lq-icon-btn {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--lq-radius-md);
+    background: transparent;
+    color: var(--lq-text-muted);
+    transition:
+      background-color var(--lq-duration-fast) var(--lq-ease),
+      color var(--lq-duration-fast) var(--lq-ease);
+  }
+  .lq-icon-btn:hover {
+    background: var(--lqi-hover);
+    color: var(--lq-text);
+  }
+  .lq-icon-btn-sm {
+    width: 26px;
+    height: 26px;
+    border-radius: var(--lq-radius-sm);
+  }
+
+  .lq-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--lq-space-2);
+    height: 34px;
+    padding: 0 var(--lq-space-4);
+    border: 1px solid var(--lq-border);
+    border-radius: var(--lq-radius-md);
+    background: var(--lq-surface);
+    color: var(--lq-text);
+    font-size: var(--lq-text-sm);
+    font-weight: 500;
+    line-height: var(--lq-leading-tight);
+    box-shadow: var(--lq-shadow-1);
+    transition:
+      background-color var(--lq-duration-fast) var(--lq-ease),
+      border-color var(--lq-duration-fast) var(--lq-ease),
+      opacity var(--lq-duration-fast) var(--lq-ease);
+  }
+  .lq-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--lq-text) 4%, var(--lq-surface));
+  }
+  .lq-btn:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+  .lq-btn-sm {
+    height: 28px;
+    padding: 0 var(--lq-space-3);
+    font-size: var(--lq-text-xs);
+  }
+  .lq-btn-block {
+    width: 100%;
+  }
+  .lq-btn-primary {
+    border-color: transparent;
+    background: var(--lq-accent);
+    color: var(--lq-accent-text);
+  }
+  .lq-btn-primary:hover:not(:disabled) {
+    background: var(--lq-accent-hover);
+  }
+  .lq-btn-quiet {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+  }
+  .lq-btn-quiet:hover:not(:disabled) {
+    background: var(--lqi-hover);
+  }
+  .lq-btn-danger {
+    border-color: transparent;
+    background: var(--lq-danger);
+    color: var(--lq-bg);
+  }
+  .lq-btn-danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--lq-danger) 86%, var(--lq-text));
+  }
+
+  /* ---------- motion ---------- */
+
+  /* The one entrance: a short fade and rise. Reduced motion zeroes the durations (tokens.css),
+   * and each user of it also drops the animation outright. */
+  @keyframes lq-enter {
+    from {
+      opacity: 0;
+      transform: translateY(var(--lq-space-2));
+    }
+  }
+  @keyframes lq-enter-fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @media (max-width: 720px) {
+    .lq-column {
+      padding: 0 var(--lq-space-4);
+    }
+  }
+}

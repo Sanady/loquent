@@ -4,7 +4,7 @@ import { StoreProvider } from "../storeContext";
 import type { Item } from "../state/reducer";
 import type { AppStore } from "../state/store";
 import { botMsg, readyStore, userMsg, view } from "../test/helpers";
-import { MessageList } from "./MessageList";
+import { EmptyState, MessageList } from "./MessageList";
 
 function renderList(store: AppStore, fileUrl?: (id: string) => Promise<{ url: string }>) {
   return render(
@@ -168,5 +168,29 @@ describe("MessageList", () => {
     const store = readyStore({ view: view([]) });
     renderList(store);
     expect(screen.getByRole("heading", { level: 1 })).toBeTruthy();
+  });
+
+  it("the empty state names the app and shows no suggestions unless given some", () => {
+    const store = readyStore({ view: view([]) });
+    const { container } = renderList(store);
+    const name = store.getState().config!.app_name;
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(name);
+    expect(container.querySelector(".lq-empty-sub")?.textContent).toBeTruthy();
+    expect(screen.queryByRole("list", { name: "Suggestions" })).toBeNull();
+  });
+
+  it("suggestion chips send their text", () => {
+    const store = readyStore({ view: view([]) });
+    const send = vi.spyOn(store.getState(), "send").mockResolvedValue(true);
+    store.setState({ send });
+    render(
+      <StoreProvider store={store}>
+        <EmptyState suggestions={["Summarise my week", "Draft a reply"]} />
+      </StoreProvider>,
+    );
+    const chips = screen.getByRole("list", { name: "Suggestions" });
+    expect(chips.querySelectorAll("button")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Draft a reply" }));
+    expect(send).toHaveBeenCalledWith("Draft a reply", []);
   });
 });

@@ -1,0 +1,151 @@
+@layer lq.components {
+  /* The composer: a surface card (radius-xl, shadow-2) docked under the conversation, with a
+   * radius-md accent send square. Pending-file chips are styled with the attachment chips. */
+
+  .lq-dock {
+    position: relative;
+    flex: none;
+    padding: var(--lq-space-2) 0 max(var(--lq-space-4), env(safe-area-inset-bottom));
+  }
+
+  .lq-jump {
+    position: absolute;
+    top: -44px;
+    left: 50%;
+    z-index: 5;
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid var(--lq-border);
+    border-radius: var(--lq-radius-pill);
+    background: var(--lq-surface-raised);
+    color: var(--lq-text-muted);
+    box-shadow: var(--lq-shadow-2);
+    transform: translateX(-50%);
+    animation: lq-enter-fade var(--lq-duration-normal) var(--lq-ease);
+  }
+  .lq-jump:hover {
+    color: var(--lq-text);
+  }
+
+  .lq-composer-box {
+    padding: var(--lq-space-2) var(--lq-space-2) var(--lq-space-2) var(--lq-space-4);
+    border: 1px solid var(--lq-border);
+    border-radius: var(--lq-radius-xl);
+    background: var(--lq-surface);
+    box-shadow: var(--lq-shadow-2);
+    transition:
+      border-color var(--lq-duration-fast) var(--lq-ease),
+      box-shadow var(--lq-duration-fast) var(--lq-ease);
+  }
+  .lq-composer-box:focus-within {
+    border-color: var(--lq-focus-ring);
+    box-shadow:
+      var(--lq-shadow-2),
+      0 0 0 3px var(--lq-accent-soft),
+      var(--lqi-glow);
+  }
+
+  [data-lq-part~="composer-input"] {
+    display: block;
+    width: 100%;
+    max-height: 220px;
+    padding: var(--lq-space-2) var(--lq-space-1) var(--lq-space-1) 0;
+    border: 0;
+    background: transparent;
+    font-size: var(--lq-text-base);
+    line-height: 1.5;
+    resize: none;
+    outline: none;
+  }
+  /* The box shows the focus ring (focus-within), so the field itself needs none. */
+  .lq-root [data-lq-part~="composer-input"]:focus-visible {
+    outline: none;
+  }
+  [data-lq-part~="composer-input"]::placeholder {
+    color: var(--lq-text-muted);
+    opacity: 1;
+  }
+
+  .lq-composer-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--lq-space-2);
+    margin-top: var(--lq-space-1);
+  }
+  .lq-composer-hint {
+    margin-left: auto;
+    color: var(--lq-text-subtle);
+    font-size: var(--lq-text-xs);
+    white-space: nowrap;
+  }
+
+  [data-lq-part~="composer-send"] {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    margin-left: auto;
+    padding: 0;
+    border: 0;
+    border-radius: var(--lqi-send-radius);
+    background: var(--lq-accent);
+    color: var(--lq-accent-text);
+    box-shadow: var(--lqi-glow);
+    transition:
+      background-color var(--lq-duration-fast) var(--lq-ease),
+      box-shadow var(--lq-duration-fast) var(--lq-ease),
+      transform var(--lq-duration-fast) var(--lq-ease);
+  }
+  .lq-composer-hint + [data-lq-part~="composer-send"] {
+    margin-left: 0;
+  }
+  [data-lq-part~="composer-send"]:hover:not(:disabled) {
+    background: var(--lq-accent-hover);
+  }
+  [data-lq-part~="composer-send"]:active:not(:disabled) {
+    transform: scale(0.94);
+  }
+  [data-lq-part~="composer-send"]:disabled {
+    background: color-mix(in srgb, var(--lq-text) 8%, transparent);
+    color: var(--lq-text-muted);
+    box-shadow: none;
+    cursor: default;
+  }
+  [data-lq-part~="composer-send"][data-lq-state="running"] {
+    background: var(--lq-text);
+    color: var(--lq-bg);
+    box-shadow: none;
+  }
+
+  .lq-composer-error {
+    margin: var(--lq-space-2) var(--lq-space-2) 0;
+    color: var(--lq-danger);
+    font-size: var(--lq-text-sm);
+  }
+
+  @media (max-width: 720px) {
+    .lq-composer-hint {
+      display: none;
+    }
+    .lq-composer-hint + [data-lq-part~="composer-send"] {
+      margin-left: auto;
+    }
+    .lq-dock {
+      padding-bottom: max(var(--lq-space-3), env(safe-area-inset-bottom));
+    }
+    /* At least 16px, so iOS does not zoom into the field. */
+    [data-lq-part~="composer-input"] {
+      font-size: max(1rem, var(--lq-text-base));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lq-jump {
+      animation: none;
+    }
+  }
+}

@@ -1,0 +1,181 @@
+@layer lq.components {
+  /* The chats sidebar: a quiet bg-subtle column behind a hairline, with the current thread
+   * lifted onto surface-raised. The narrow-screen drawer is in drawer.css. */
+
+  .lq-nav-wrap {
+    flex: none;
+    width: var(--lq-sidebar-width);
+    height: 100%;
+    background: var(--lq-bg-subtle);
+    border-right: 1px solid var(--lq-border);
+    transition:
+      margin-left var(--lq-duration-normal) var(--lq-ease),
+      visibility var(--lq-duration-normal);
+  }
+  .lq-layout.nav-closed:not(.is-narrow) .lq-nav-wrap {
+    margin-left: calc(-1 * var(--lq-sidebar-width));
+    visibility: hidden;
+  }
+
+  [data-lq-part~="sidebar"] {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  /* Same height as the header, so New chat sits on the header's line. */
+  [data-lq-part~="sidebar-header"] {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--lq-space-2);
+    min-height: 56px;
+    padding: var(--lq-space-2) var(--lq-space-3);
+  }
+
+  [data-lq-part~="new-chat"] {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--lq-space-2);
+    min-width: 0;
+    height: 36px;
+    padding: 0 var(--lq-space-3);
+    border: 1px solid var(--lqi-new-chat-border);
+    border-radius: var(--lq-radius-md);
+    background: var(--lqi-new-chat-bg);
+    color: var(--lqi-new-chat-text);
+    font-size: var(--lq-text-sm);
+    font-weight: 500;
+    box-shadow: var(--lq-shadow-1);
+    transition:
+      background-color var(--lq-duration-fast) var(--lq-ease),
+      border-color var(--lq-duration-fast) var(--lq-ease);
+  }
+  [data-lq-part~="new-chat"]:hover {
+    background: color-mix(in srgb, var(--lqi-new-chat-text) 5%, var(--lqi-new-chat-bg));
+  }
+  [data-lq-part~="new-chat"] .lq-icon {
+    color: var(--lqi-new-chat-icon);
+  }
+
+  [data-lq-part~="thread-list"] {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 var(--lq-space-2) var(--lq-space-5);
+  }
+  .lq-thread-empty {
+    margin: var(--lq-space-3);
+    color: var(--lq-text-muted);
+    font-size: var(--lq-text-sm);
+  }
+  .lq-thread-group ul {
+    display: grid;
+    /* minmax(0, …): long titles ellipsize instead of widening the column. */
+    grid-template-columns: minmax(0, 1fr);
+    gap: calc(var(--lq-space-1) / 2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .lq-thread-group-label {
+    margin: 0;
+    padding: var(--lq-space-4) var(--lq-space-3) var(--lq-space-1);
+    color: var(--lq-text-muted);
+    font-size: var(--lq-text-xs);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    line-height: var(--lq-leading-tight);
+    text-transform: uppercase;
+  }
+
+  [data-lq-part~="thread-item"] {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-height: 34px;
+    border: 1px solid transparent;
+    border-radius: var(--lq-radius-md);
+    font-size: var(--lq-text-sm);
+    transition: background-color var(--lq-duration-fast) var(--lq-ease);
+  }
+  [data-lq-part~="thread-item"]:hover {
+    background: var(--lqi-hover);
+  }
+  [data-lq-part~="thread-item"][data-lq-active="true"] {
+    border-color: var(--lq-border);
+    background: var(--lq-surface-raised);
+    box-shadow: var(--lq-shadow-1);
+    font-weight: 500;
+  }
+
+  .lq-thread-open {
+    flex: 1;
+    min-width: 0;
+    padding: var(--lq-space-2) var(--lq-space-2) var(--lq-space-2) var(--lq-space-3);
+    overflow: hidden;
+    border: 0;
+    border-radius: inherit;
+    background: none;
+    font-weight: inherit;
+    line-height: var(--lq-leading-tight);
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .lq-thread-open:focus-visible {
+    outline-offset: -2px;
+  }
+
+  /* Rename and delete take no room until the row is hovered, focused or current, so titles
+   * use the full width. Keyboard focus reveals them (focus-within). */
+  .lq-thread-actions {
+    display: flex;
+    flex: none;
+    width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity var(--lq-duration-fast) var(--lq-ease);
+  }
+  [data-lq-part~="thread-item"]:hover .lq-thread-actions,
+  [data-lq-part~="thread-item"]:focus-within .lq-thread-actions,
+  [data-lq-part~="thread-item"][data-lq-active="true"] .lq-thread-actions {
+    width: auto;
+    padding-right: var(--lq-space-1);
+    opacity: 1;
+  }
+  @media (hover: none) {
+    .lq-thread-actions {
+      width: auto;
+      padding-right: var(--lq-space-1);
+      opacity: 1;
+    }
+  }
+
+  .lq-thread.is-editing {
+    padding: var(--lq-space-1);
+  }
+  .lq-thread-input {
+    width: 100%;
+    height: 28px;
+    padding: 0 var(--lq-space-2);
+    border: 1px solid var(--lq-focus-ring);
+    border-radius: var(--lq-radius-sm);
+    background: var(--lq-surface);
+    font-size: var(--lq-text-sm);
+    outline: none;
+    box-shadow: 0 0 0 3px var(--lq-accent-soft);
+  }
+
+  .lq-thread.is-confirm {
+    flex-wrap: wrap;
+    gap: var(--lq-space-2);
+    padding: var(--lq-space-2) var(--lq-space-2) var(--lq-space-2) var(--lq-space-3);
+    border-color: color-mix(in srgb, var(--lq-danger) 25%, transparent);
+    background: color-mix(in srgb, var(--lq-danger) 8%, var(--lq-surface));
+  }
+  .lq-thread-confirm-text {
+    flex: 1 0 100%;
+    font-weight: 500;
+  }
+}

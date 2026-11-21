@@ -40,5 +40,17 @@
     --lq-shadow-1: 0 1px 1px rgb(74 52 28 / 0.03), 0 1px 2px rgb(74 52 28 / 0.04);
     --lq-shadow-2: 0 1px 2px rgb(74 52 28 / 0.04), 0 4px 12px -2px rgb(74 52 28 / 0.06), 0 12px 24px -10px rgb(74 52 28 / 0.07);
     --lq-shadow-3: 0 2px 4px rgb(74 52 28 / 0.04), 0 14px 28px -8px rgb(74 52 28 / 0.09), 0 32px 64px -20px rgb(74 52 28 / 0.12);
+
+    /* Shell touches (private --lqi-* knobs, see components/shell.css): the serif carries the
+     * app name and headings, New chat is set in ink, and send is a round terracotta seal. */
+    --lqi-title-size: var(--lq-text-lg);
+    --lqi-title-tracking: -0.006em;
+    --lqi-display-weight: 500;
+    --lqi-display-tracking: -0.012em;
+    --lqi-new-chat-bg: var(--lq-text);
+    --lqi-new-chat-text: var(--lq-bg);
+    --lqi-new-chat-border: transparent;
+    --lqi-new-chat-icon: currentColor;
+    --lqi-send-radius: var(--lq-radius-pill);
   }
 }

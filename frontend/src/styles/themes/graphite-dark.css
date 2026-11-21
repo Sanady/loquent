@@ -35,5 +35,9 @@
     --lq-shadow-1: inset 0 1px 0 rgb(255 255 255 / 0.03), 0 1px 2px rgb(4 4 6 / 0.4);
     --lq-shadow-2: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 1px 2px rgb(4 4 6 / 0.35), 0 8px 20px -6px rgb(4 4 6 / 0.5);
     --lq-shadow-3: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 2px 4px rgb(4 4 6 / 0.35), 0 20px 48px -12px rgb(4 4 6 / 0.65);
+
+    /* Shell touches (private --lqi-* knobs, see components/shell.css): the sidebar sits on the
+     * darker bg-subtle, so New chat lifts to surface-raised. */
+    --lqi-new-chat-bg: var(--lq-surface-raised);
   }
 }

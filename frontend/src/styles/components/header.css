@@ -1,0 +1,82 @@
+@layer lq.components {
+  /* The top bar: 56px, a hairline under it, the app name in the display face, actions right. */
+
+  [data-lq-part~="header"] {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--lq-space-2);
+    height: 56px;
+    padding: 0 var(--lq-space-3);
+    border-bottom: 1px solid var(--lq-border);
+    background: var(--lq-bg);
+  }
+
+  [data-lq-part~="header-title"] {
+    display: flex;
+    align-items: center;
+    gap: var(--lq-space-2);
+    min-width: 0;
+    padding-left: var(--lq-space-1);
+  }
+
+  .lq-logo {
+    display: block;
+    height: 24px;
+    width: auto;
+    max-width: 132px;
+    object-fit: contain;
+    border-radius: var(--lq-radius-sm);
+  }
+
+  /* The app name, here and on the sign-in card. */
+  .lq-brand-name {
+    overflow: hidden;
+    font-family: var(--lq-font-display);
+    font-size: var(--lqi-title-size);
+    font-weight: 600;
+    letter-spacing: var(--lqi-title-tracking);
+    line-height: var(--lq-leading-tight);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-lq-part~="header-actions"] {
+    display: flex;
+    align-items: center;
+    gap: var(--lq-space-1);
+    margin-left: auto;
+  }
+
+  /* A transient notice under the header (e.g. a thread that could not be opened). */
+  .lq-notice {
+    display: flex;
+    align-items: center;
+    gap: var(--lq-space-2);
+    width: calc(100% - 2 * var(--lq-space-4));
+    max-width: var(--lq-content-width);
+    margin: var(--lq-space-2) auto 0;
+    padding: var(--lq-space-1) var(--lq-space-1) var(--lq-space-1) var(--lq-space-4);
+    border: 1px solid var(--lq-border);
+    border-radius: var(--lq-radius-md);
+    background: var(--lq-surface);
+    box-shadow: var(--lq-shadow-1);
+    font-size: var(--lq-text-sm);
+    animation: lq-enter var(--lq-duration-normal) var(--lq-ease) both;
+  }
+  .lq-notice span {
+    flex: 1;
+  }
+
+  @media (max-width: 720px) {
+    [data-lq-part~="header"] {
+      padding: 0 var(--lq-space-2);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lq-notice {
+      animation: none;
+    }
+  }
+}

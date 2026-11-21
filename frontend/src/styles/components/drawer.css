@@ -1,0 +1,36 @@
+@layer lq.components {
+  /* Narrow screens: the sidebar becomes a modal drawer over a scrim. */
+
+  .lq-layout.is-narrow .lq-nav-wrap {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 30;
+    width: min(300px, 86vw);
+    box-shadow: var(--lq-shadow-3);
+    transform: translateX(-102%);
+    visibility: hidden;
+    transition:
+      transform var(--lq-duration-normal) var(--lq-ease),
+      visibility var(--lq-duration-normal);
+  }
+  .lq-layout.is-narrow.nav-open .lq-nav-wrap {
+    transform: none;
+    visibility: visible;
+    /* Visible at once on open (so focus can move in); hidden only after the slide-out ends. */
+    transition: transform var(--lq-duration-normal) var(--lq-ease);
+  }
+
+  .lq-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    background: var(--lq-scrim);
+    animation: lq-enter-fade var(--lq-duration-normal) var(--lq-ease);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lq-scrim {
+      animation: none;
+    }
+  }
+}

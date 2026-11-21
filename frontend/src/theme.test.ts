@@ -8,6 +8,16 @@ vi.mock("./fonts", () => ({ loadThemeFonts: vi.fn(async () => {}) }));
 
 afterEach(() => vi.restoreAllMocks());
 
+/** Each theme's color tokens as a plain rule (the real theme CSS is layered; jsdom may not cascade @layer). */
+const THEME_RULES = Object.fromEntries(
+  THEMES.map((id) => [
+    id,
+    `[data-lq-theme="${id}"] { ${Object.entries(THEME_TOKENS[id])
+      .map(([k, v]) => `--lq-${k}: ${v};`)
+      .join(" ")} }`,
+  ]),
+) as Record<ThemeId, string>;
+
 /** applyAppearance with the legacy `config.theme` only (the brand layer), in a light theme. */
 const applyBrand = (brand: Record<string, string>, el?: HTMLElement, theme: ThemeId = "graphite") => applyAppearance({ theme }, brand, el);
 
@@ -212,24 +222,35 @@ describe("styles.css cascade", () => {
     }
   });
 
-  it("without a configured background the built-in dark palette applies", () => {
+  // interim: removed in Task 6 with styles.css. The legacy names alias the theme tokens, so
+  // without a brand background the conversation follows the active theme.
+  function mountTheme(theme: ThemeId, mode: "light" | "dark") {
+    const themeStyle = document.createElement("style");
+    themeStyle.textContent = THEME_RULES[theme];
+    document.head.appendChild(themeStyle);
+    const m = mount(mode);
+    return { get: m.get, done: () => (m.done(), themeStyle.remove()) };
+  }
+
+  it("without a configured background the legacy names follow the theme", () => {
     applyBrand({ text: "#222222" }, undefined, "midnight");
-    const { get, done } = mount("dark");
+    const { get, done } = mountTheme("midnight", "dark");
     try {
-      expect(get("--lq-background")).toBe("#141513");
-      expect(get("--lq-text")).toBe("#e8e6e1");
-      expect(get("--lq-elevated")).toBe("#222420");
+      expect(get("--lq-background")).toBe(THEME_TOKENS.midnight.bg);
+      expect(get("--lq-text")).toBe(THEME_TOKENS.midnight.text);
+      expect(get("--lq-muted")).toBe(THEME_TOKENS.midnight["text-muted"]);
+      expect(get("--lq-elevated")).toBe(THEME_TOKENS.midnight["surface-raised"]);
     } finally {
       done();
     }
   });
 
-  it("defaults: white elevated and on-accent in light mode", () => {
+  it("defaults: the legacy names take the light theme's values", () => {
     applyBrand({});
-    const { get, done } = mount("light");
+    const { get, done } = mountTheme("graphite", "light");
     try {
-      expect(get("--lq-elevated")).toBe("#ffffff");
-      expect(get("--lq-on-accent")).toBe("#ffffff");
+      expect(get("--lq-elevated")).toBe(THEME_TOKENS.graphite["surface-raised"]);
+      expect(get("--lq-on-accent")).toBe(THEME_TOKENS.graphite["accent-text"]);
     } finally {
       done();
     }

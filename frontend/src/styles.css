@@ -1,480 +1,39 @@
 /*
- * Chat UI styles. Everything is driven by --lq-* variables.
+ * Legacy conversation styles (messages, activity, markdown, code, attachments, widgets).
+ * interim: removed in Task 6, which restyles the conversation on the token layer.
  *
- * theme.ts sets these inline on <html> from config.theme:
- *   --lq-accent --lq-background --lq-surface --lq-text --lq-muted --lq-radius --lq-font
- * plus the derived --lq-on-accent (picked by contrast against the accent) and, when a brand
- * background is configured, --lq-elevated. Defaults for all of them live on :root, so the inline
- * values win.
+ * The shell (layout, sidebar, header, composer, empty state, drawer, login, shared buttons,
+ * focus) now lives in styles/components/*.css inside @layer lq.components. This file is
+ * unlayered, so it must not style the shell: an unlayered rule would beat every layer.
  *
- * Dark mode: .lq-root[data-mode] carries the effective scheme. The built-in dark palette below
- * overrides a palette key only if <html data-lq-custom-colors> does not list it. theme.ts lists
- * all four palette keys when the developer configures `background`, so a brand palette is
- * never replaced in dark mode (R25).
- *
- * An operator stylesheet (branding/custom.css) loads after this file and can override anything.
+ * The old variable names below are aliases of the theme tokens, set on .lq-root so they
+ * follow the active theme and the brand layer (theme.ts sets the new names inline on <html>).
+ * Names shared with the token layer (--lq-accent, --lq-surface, --lq-text, --lq-border,
+ * --lq-border-strong, --lq-accent-soft, --lq-radius-sm, --lq-danger, --lq-font-*) are not
+ * redefined here, so the theme's values reach every element.
  */
 
-:root {
-  --lq-accent: #0f8a74;
-  --lq-background: #fbfaf8;
-  --lq-surface: #f1efea;
-  --lq-text: #1f1e1c;
-  --lq-muted: #6b675f;
-  --lq-radius: 14px;
-  --lq-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --lq-font-display: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-  --lq-font-mono: ui-monospace, "SFMono-Regular", "Cascadia Code", Menlo, Consolas, "Liberation Mono", monospace;
-  /* derived; theme.ts overrides these inline when the config needs it */
-  --lq-on-accent: #ffffff;
-  --lq-elevated: #ffffff;
+.lq-root {
+  --lq-background: var(--lq-bg);
+  --lq-muted: var(--lq-text-muted);
+  --lq-elevated: var(--lq-surface-raised);
+  --lq-on-accent: var(--lq-accent-text);
+  --lq-radius: var(--lq-radius-lg);
+  --lq-font: var(--lq-font-body);
+  --lq-shadow: var(--lq-shadow-2);
+  --lq-hover: color-mix(in srgb, var(--lq-text) 6%, transparent);
+  --lq-danger-soft: color-mix(in srgb, var(--lq-danger) 9%, transparent);
 }
 
-.lq-root {
-  --lq-danger: #b42318;
-  --lq-shadow: 0 1px 2px rgb(20 18 14 / 0.04), 0 10px 30px -14px rgb(20 18 14 / 0.22);
-  --lq-border: color-mix(in srgb, var(--lq-text) 10%, transparent);
-  --lq-border-strong: color-mix(in srgb, var(--lq-text) 17%, transparent);
-  --lq-hover: color-mix(in srgb, var(--lq-text) 6%, transparent);
-  --lq-accent-soft: color-mix(in srgb, var(--lq-accent) 14%, transparent);
-  --lq-danger-soft: color-mix(in srgb, var(--lq-danger) 9%, transparent);
-  --lq-radius-sm: calc(var(--lq-radius) * 0.6);
+/* The effective scheme: a brand background can fix it against the theme's (R25). */
+.lq-root[data-mode="light"] {
   color-scheme: light;
 }
-
 .lq-root[data-mode="dark"] {
-  --lq-danger: #f97066;
-  --lq-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px -14px rgb(0 0 0 / 0.6);
   color-scheme: dark;
 }
 
-/* Built-in dark palette, one rule per key so a configured (custom) key is never overridden. */
-:root:not([data-lq-custom-colors~="background"]) .lq-root[data-mode="dark"] {
-  --lq-background: #141513;
-  --lq-elevated: #222420;
-}
-:root:not([data-lq-custom-colors~="surface"]) .lq-root[data-mode="dark"] {
-  --lq-surface: #1c1e1b;
-}
-:root:not([data-lq-custom-colors~="text"]) .lq-root[data-mode="dark"] {
-  --lq-text: #e8e6e1;
-}
-:root:not([data-lq-custom-colors~="muted"]) .lq-root[data-mode="dark"] {
-  --lq-muted: #a09c93;
-}
-
-/* ---------- base ---------- */
-
-html,
-body {
-  margin: 0;
-  height: 100%;
-}
-
-.lq-root {
-  position: fixed;
-  inset: 0;
-  overflow: hidden;
-  background: var(--lq-background);
-  color: var(--lq-text);
-  font-family: var(--lq-font);
-  font-size: 15px;
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}
-
-.lq-root *,
-.lq-root *::before,
-.lq-root *::after {
-  box-sizing: border-box;
-}
-
-/* zero-specificity resets so component classes always win */
-:where(.lq-root) :where(button, input, textarea) {
-  font: inherit;
-  color: inherit;
-}
-
-:where(.lq-root) :where(button) {
-  cursor: pointer;
-}
-
-.lq-root :focus-visible {
-  outline: 2px solid var(--lq-accent);
-  outline-offset: 2px;
-}
-
-.lq-sr {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
-}
-
-.lq-icon {
-  flex: none;
-  display: block;
-}
-
-/* ---------- buttons ---------- */
-
-.lq-icon-btn {
-  display: inline-grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--lq-muted);
-  transition: background-color 0.15s, color 0.15s;
-}
-.lq-icon-btn:hover {
-  background: var(--lq-hover);
-  color: var(--lq-text);
-}
-.lq-icon-btn-sm {
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-}
-
-.lq-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 14px;
-  border: 1px solid var(--lq-border-strong);
-  border-radius: var(--lq-radius-sm);
-  background: var(--lq-elevated);
-  font-size: 14px;
-  font-weight: 500;
-  transition: background-color 0.15s, border-color 0.15s, opacity 0.15s;
-}
-.lq-btn:hover {
-  background: var(--lq-surface);
-}
-.lq-btn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-.lq-btn-sm {
-  height: 28px;
-  padding: 0 10px;
-  font-size: 13px;
-}
-.lq-btn-block {
-  width: 100%;
-}
-.lq-btn-primary {
-  border-color: transparent;
-  background: var(--lq-accent);
-  color: var(--lq-on-accent);
-}
-.lq-btn-primary:hover {
-  background: color-mix(in srgb, var(--lq-accent) 88%, black);
-}
-.lq-btn-quiet {
-  border-color: transparent;
-  background: transparent;
-  color: var(--lq-text);
-}
-.lq-btn-quiet:hover {
-  background: var(--lq-hover);
-}
-.lq-btn-danger {
-  border-color: transparent;
-  background: var(--lq-danger);
-  color: #fff;
-}
-.lq-btn-danger:hover {
-  background: color-mix(in srgb, var(--lq-danger) 88%, black);
-}
-.lq-root[data-mode="dark"] .lq-btn-danger {
-  color: #1a0a08;
-}
-
-/* ---------- layout ---------- */
-
-.lq-layout {
-  display: flex;
-  height: 100%;
-}
-
-.lq-nav-wrap {
-  flex: none;
-  width: 272px;
-  height: 100%;
-  background: var(--lq-surface);
-  border-right: 1px solid var(--lq-border);
-  transition: margin-left 0.24s ease, visibility 0.24s;
-}
-.lq-layout.nav-closed:not(.is-narrow) .lq-nav-wrap {
-  margin-left: -272px;
-  visibility: hidden;
-}
-
-.lq-layout.is-narrow .lq-nav-wrap {
-  position: fixed;
-  inset: 0 auto 0 0;
-  z-index: 30;
-  width: min(300px, 86vw);
-  box-shadow: var(--lq-shadow);
-  transform: translateX(-102%);
-  visibility: hidden;
-  transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0.26s;
-}
-.lq-layout.is-narrow.nav-open .lq-nav-wrap {
-  transform: none;
-  visibility: visible;
-  /* become visible at once on open (so focus can move in); stay visible until the slide-out ends */
-  transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.lq-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  background: rgb(10 10 8 / 0.36);
-  animation: lq-fade 0.2s ease-out;
-}
-
-.lq-main {
-  position: relative;
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  flex-direction: column;
-}
-
-.lq-column {
-  width: 100%;
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 0 24px;
-}
-
-/* ---------- header ---------- */
-
-.lq-header {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 6px;
-  height: 56px;
-  padding: 0 12px;
-}
-
-.lq-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  padding-left: 4px;
-}
-.lq-logo {
-  display: block;
-  height: 26px;
-  width: auto;
-  max-width: 132px;
-  object-fit: contain;
-  border-radius: 6px;
-}
-.lq-brand-name {
-  overflow: hidden;
-  font-size: 15.5px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.lq-header-actions {
-  display: flex;
-  gap: 2px;
-  margin-left: auto;
-}
-
-/* ---------- sidebar ---------- */
-
-.lq-sidebar {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-.lq-sidebar-top {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  padding: 12px 12px 6px;
-}
-.lq-new-chat {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  height: 40px;
-  padding: 0 12px;
-  border: 1px solid var(--lq-border);
-  border-radius: var(--lq-radius-sm);
-  background: var(--lq-elevated);
-  font-size: 14px;
-  font-weight: 500;
-  box-shadow: 0 1px 1px rgb(0 0 0 / 0.03);
-  transition: border-color 0.15s;
-}
-.lq-new-chat:hover {
-  border-color: var(--lq-border-strong);
-}
-.lq-new-chat .lq-icon {
-  color: var(--lq-accent);
-}
-
-.lq-thread-scroll {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 8px 20px;
-}
-.lq-thread-empty {
-  margin: 16px 10px;
-  color: var(--lq-muted);
-  font-size: 13.5px;
-}
-.lq-thread-group ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.lq-thread-group-label {
-  margin: 0;
-  padding: 16px 10px 6px;
-  color: var(--lq-muted);
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.lq-thread {
-  position: relative;
-  display: flex;
-  align-items: center;
-  min-height: 36px;
-  margin: 1px 0;
-  border-radius: 8px;
-  transition: background-color 0.12s;
-}
-.lq-thread:hover {
-  background: var(--lq-hover);
-}
-.lq-thread.is-current {
-  background: var(--lq-accent-soft);
-}
-.lq-thread.is-current::before {
-  content: "";
-  position: absolute;
-  top: 9px;
-  bottom: 9px;
-  left: 0;
-  width: 3px;
-  border-radius: 3px;
-  background: var(--lq-accent);
-}
-.lq-thread-open {
-  flex: 1;
-  min-width: 0;
-  padding: 7px 10px 7px 12px;
-  overflow: hidden;
-  border: 0;
-  border-radius: 8px;
-  background: none;
-  font-size: 14px;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.lq-thread-open:focus-visible {
-  outline-offset: -2px;
-}
-.lq-thread-actions {
-  display: flex;
-  gap: 0;
-  padding-right: 4px;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-.lq-thread:hover .lq-thread-actions,
-.lq-thread:focus-within .lq-thread-actions,
-.lq-thread.is-current .lq-thread-actions {
-  opacity: 1;
-}
-@media (hover: none) {
-  .lq-thread-actions {
-    opacity: 1;
-  }
-}
-.lq-thread.is-editing {
-  padding: 3px;
-}
-.lq-thread-input {
-  width: 100%;
-  height: 30px;
-  padding: 0 8px;
-  border: 1px solid var(--lq-accent);
-  border-radius: 6px;
-  background: var(--lq-elevated);
-  font-size: 14px;
-  outline: none;
-  box-shadow: 0 0 0 3px var(--lq-accent-soft);
-}
-.lq-thread.is-confirm {
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 8px 8px 12px;
-  background: var(--lq-danger-soft);
-}
-.lq-thread-confirm-text {
-  flex: 1 0 100%;
-  font-size: 13.5px;
-  font-weight: 500;
-}
-
 /* ---------- conversation ---------- */
-
-.lq-conversation {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable both-edges;
-}
-
-.lq-notice {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: calc(100% - 32px);
-  max-width: 712px;
-  margin: 4px auto 0;
-  padding: 6px 6px 6px 14px;
-  border: 1px solid var(--lq-border);
-  border-radius: var(--lq-radius-sm);
-  background: var(--lq-surface);
-  font-size: 14px;
-  animation: lq-rise 0.2s ease-out;
-}
-.lq-notice span {
-  flex: 1;
-}
 
 .lq-log {
   display: flex;
@@ -484,32 +43,6 @@ body {
 }
 .lq-log > * {
   animation: lq-rise 0.28s ease-out both;
-}
-
-.lq-empty {
-  padding: clamp(56px, 22vh, 220px) 0 40px;
-  text-align: center;
-  animation: lq-rise 0.4s ease-out both;
-}
-.lq-empty-logo {
-  display: block;
-  height: 44px;
-  width: auto;
-  max-width: 180px;
-  margin: 0 auto 20px;
-  object-fit: contain;
-}
-.lq-empty h1 {
-  margin: 0 0 8px;
-  font-family: var(--lq-font-display);
-  font-size: clamp(28px, 4.2vw, 38px);
-  font-weight: 500;
-  letter-spacing: -0.015em;
-  line-height: 1.15;
-}
-.lq-empty p {
-  margin: 0;
-  color: var(--lq-muted);
 }
 
 /* messages */
@@ -841,117 +374,6 @@ button.lq-chip:hover {
   color: var(--lq-text);
 }
 
-/* ---------- composer ---------- */
-
-.lq-dock {
-  position: relative;
-  flex: none;
-  padding: 0 0 max(14px, env(safe-area-inset-bottom));
-}
-.lq-jump {
-  position: absolute;
-  top: -50px;
-  left: 50%;
-  z-index: 5;
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--lq-border-strong);
-  border-radius: 50%;
-  background: var(--lq-elevated);
-  color: var(--lq-text);
-  box-shadow: var(--lq-shadow);
-  transform: translateX(-50%);
-  animation: lq-fade 0.2s ease-out;
-}
-
-.lq-composer-box {
-  padding: 8px 8px 8px 14px;
-  border: 1px solid var(--lq-border-strong);
-  border-radius: calc(var(--lq-radius) + 6px);
-  background: var(--lq-elevated);
-  box-shadow: var(--lq-shadow);
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.lq-composer-box:focus-within {
-  border-color: color-mix(in srgb, var(--lq-accent) 55%, var(--lq-border-strong));
-  box-shadow: var(--lq-shadow), 0 0 0 3px var(--lq-accent-soft);
-}
-.lq-pending {
-  padding-top: 4px;
-}
-.lq-input {
-  display: block;
-  width: 100%;
-  max-height: 220px;
-  padding: 7px 4px 4px 2px;
-  border: 0;
-  background: transparent;
-  font-size: 15.5px;
-  line-height: 1.5;
-  resize: none;
-  outline: none;
-}
-/* the composer box shows the focus ring (focus-within), so the field itself needs none */
-.lq-root .lq-input:focus-visible {
-  outline: none;
-}
-.lq-input::placeholder {
-  color: var(--lq-muted);
-  opacity: 0.85;
-}
-.lq-composer-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 4px;
-}
-.lq-composer-hint {
-  margin-left: auto;
-  padding-right: 6px;
-  color: var(--lq-muted);
-  font-size: 12px;
-  opacity: 0.8;
-  white-space: nowrap;
-}
-.lq-send {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  margin-left: auto;
-  border: 0;
-  border-radius: 12px;
-  background: var(--lq-accent);
-  color: var(--lq-on-accent);
-  transition: background-color 0.15s, transform 0.1s;
-}
-.lq-composer-hint + .lq-send {
-  margin-left: 0;
-}
-.lq-send:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--lq-accent) 86%, black);
-}
-.lq-send:active:not(:disabled) {
-  transform: scale(0.95);
-}
-.lq-send:disabled {
-  background: var(--lq-hover);
-  color: var(--lq-muted);
-  cursor: default;
-}
-.lq-send.is-stop {
-  background: var(--lq-text);
-  color: var(--lq-background);
-}
-.lq-composer-error {
-  margin: 8px 6px 0;
-  color: var(--lq-danger);
-  font-size: 13px;
-}
-
 /* ---------- markdown ---------- */
 
 .lq-md {
@@ -1179,103 +601,12 @@ button.lq-chip:hover {
   background-color: #67060c;
 }
 
-/* ---------- login, boot, fatal ---------- */
-
-.lq-login,
-.lq-fatal,
-.lq-boot {
-  display: grid;
-  place-items: center;
-  height: 100%;
-  padding: 24px 16px;
-  overflow-y: auto;
-}
-.lq-login-card {
-  display: grid;
-  gap: 14px;
-  width: 100%;
-  max-width: 380px;
-  padding: 32px 28px 28px;
-  border: 1px solid var(--lq-border);
-  border-radius: calc(var(--lq-radius) + 6px);
-  background: var(--lq-elevated);
-  box-shadow: var(--lq-shadow);
-  animation: lq-rise 0.35s ease-out both;
-}
-.lq-login-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 26px;
-  color: var(--lq-muted);
-}
-.lq-login-card h1 {
-  margin: 0 0 4px;
-  font-family: var(--lq-font-display);
-  font-size: 30px;
-  font-weight: 500;
-  letter-spacing: -0.015em;
-}
-.lq-login-error {
-  margin: 0;
-  padding: 9px 12px;
-  border-radius: var(--lq-radius-sm);
-  background: var(--lq-danger-soft);
-  font-size: 14px;
-}
-.lq-field {
-  display: grid;
-  gap: 6px;
-  font-size: 13.5px;
-  font-weight: 500;
-}
-.lq-field input {
-  height: 42px;
-  padding: 0 12px;
-  border: 1px solid var(--lq-border-strong);
-  border-radius: var(--lq-radius-sm);
-  background: var(--lq-background);
-  font-size: 15px;
-  font-weight: 400;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.lq-field input:focus-visible {
-  border-color: var(--lq-accent);
-  outline: none;
-  box-shadow: 0 0 0 3px var(--lq-accent-soft);
-}
-.lq-login-card .lq-btn-primary {
-  height: 42px;
-  margin-top: 6px;
-}
-
-.lq-fatal {
-  align-content: center;
-  gap: 8px;
-  text-align: center;
-}
-.lq-fatal h1 {
-  margin: 0;
-  font-family: var(--lq-font-display);
-  font-size: 28px;
-  font-weight: 500;
-}
-.lq-fatal p {
-  margin: 0 0 12px;
-  color: var(--lq-muted);
-}
-
 /* ---------- motion ---------- */
 
 @keyframes lq-rise {
   from {
     opacity: 0;
     transform: translateY(6px);
-  }
-}
-@keyframes lq-fade {
-  from {
-    opacity: 0;
   }
 }
 @keyframes lq-spin {
@@ -1313,13 +644,6 @@ button.lq-chip:hover {
 /* ---------- small screens ---------- */
 
 @media (max-width: 720px) {
-  .lq-header {
-    height: 52px;
-    padding: 0 8px;
-  }
-  .lq-column {
-    padding: 0 14px;
-  }
   .lq-log {
     gap: 18px;
     padding-top: 12px;
@@ -1329,18 +653,6 @@ button.lq-chip:hover {
   }
   .lq-msg-user {
     max-width: 90%;
-  }
-  .lq-composer-hint {
-    display: none;
-  }
-  .lq-composer-hint + .lq-send {
-    margin-left: auto;
-  }
-  .lq-dock {
-    padding-bottom: max(10px, env(safe-area-inset-bottom));
-  }
-  .lq-input {
-    font-size: 16px; /* stops iOS zooming into the field */
   }
 }
 

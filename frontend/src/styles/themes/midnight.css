@@ -35,5 +35,11 @@
     --lq-shadow-1: inset 0 1px 0 rgb(148 170 230 / 0.04), 0 1px 2px rgb(2 6 23 / 0.45);
     --lq-shadow-2: inset 0 1px 0 rgb(148 170 230 / 0.05), 0 1px 2px rgb(2 6 23 / 0.4), 0 8px 22px -6px rgb(2 6 23 / 0.55);
     --lq-shadow-3: inset 0 1px 0 rgb(148 170 230 / 0.06), 0 2px 4px rgb(2 6 23 / 0.4), 0 22px 52px -12px rgb(2 6 23 / 0.7);
+
+    /* Shell touches (private --lqi-* knobs, see components/shell.css): New chat steps up to
+     * surface-raised behind a brighter edge, and the teal glows on focus and on send only. */
+    --lqi-new-chat-bg: var(--lq-surface-raised);
+    --lqi-new-chat-border: color-mix(in srgb, var(--lq-border-strong) 35%, var(--lq-border));
+    --lqi-glow: 0 0 16px -6px color-mix(in srgb, var(--lq-accent) 45%, transparent);
   }
 }
