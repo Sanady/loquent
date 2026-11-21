@@ -11,13 +11,17 @@ import aiosqlite
 from ..protocol import new_id
 from .models import FileMeta, Run, RunInProgress, RunStatus, StoredEvent, Thread, User
 
+# Monotonic per-database update sequence: breaks updated_at ties on coarse clocks.
+_NEXT_ORD = "(SELECT COALESCE(MAX(ord), 0) + 1 FROM threads)"
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS threads (
     id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, title TEXT NOT NULL,
-    created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+    ord INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS threads_owner ON threads(owner_id, updated_at);
 CREATE TABLE IF NOT EXISTS runs (
     id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, status TEXT NOT NULL,
@@ -85,6 +89,13 @@ class SqliteStore:
         if self._path != ":memory:":
             await self._db.execute("PRAGMA journal_mode=WAL")
         await self._db.executescript(_SCHEMA)
+        # Older database files predate the update sequence.
+        cols = [
+            r["name"]
+            for r in await (await self._db.execute("PRAGMA table_info(threads)")).fetchall()
+        ]
+        if "ord" not in cols:
+            await self._db.execute("ALTER TABLE threads ADD COLUMN ord INTEGER NOT NULL DEFAULT 0")
 
     async def close(self) -> None:
         if self._db is not None:
@@ -135,7 +146,8 @@ class SqliteStore:
         now = _now()
         t = Thread(id=new_id(), owner_id=owner_id, title=title, created_at=now, updated_at=now)
         await self._write(
-            "INSERT INTO threads VALUES (?,?,?,?,?)",
+            "INSERT INTO threads (id, owner_id, title, created_at, updated_at, ord) "
+            f"VALUES (?,?,?,?,?,{_NEXT_ORD})",
             (t.id, owner_id, title, _iso(now), _iso(now)),
         )
         return t
@@ -146,14 +158,14 @@ class SqliteStore:
 
     async def list_threads(self, owner_id: str, limit: int = 50) -> list[Thread]:
         rows = await self._all(
-            "SELECT * FROM threads WHERE owner_id=? ORDER BY updated_at DESC, rowid DESC LIMIT ?",
+            "SELECT * FROM threads WHERE owner_id=? ORDER BY updated_at DESC, ord DESC LIMIT ?",
             (owner_id, limit),
         )
         return [_thread(r) for r in rows]
 
     async def rename_thread(self, thread_id: str, title: str) -> None:
         await self._write(
-            "UPDATE threads SET title=?, updated_at=? WHERE id=?",
+            f"UPDATE threads SET title=?, updated_at=?, ord={_NEXT_ORD} WHERE id=?",
             (title, _iso(_now()), thread_id),
         )
 
@@ -197,7 +209,8 @@ class SqliteStore:
                     (run.id, thread_id, "running", _iso(now), _iso(now)),
                 )
                 await self.db.execute(
-                    "UPDATE threads SET updated_at=? WHERE id=?", (_iso(now), thread_id)
+                    f"UPDATE threads SET updated_at=?, ord={_NEXT_ORD} WHERE id=?",
+                    (_iso(now), thread_id),
                 )
                 await self.db.execute("COMMIT")
             except RunInProgress:
