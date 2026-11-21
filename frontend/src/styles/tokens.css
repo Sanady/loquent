@@ -1,0 +1,96 @@
+/* Scale tokens shared by every theme: type, space, radius, elevation, motion, layout.
+ * Themes (styles/themes/*.css, layer lq.themes) set colors and may override fonts, radii
+ * and shadows. They never set space-* or text-*, so density and text size apply to all.
+ *
+ * Density and text size are attributes, normally on <html>:
+ *   data-lq-density="comfortable|compact"   rescales space-*
+ *   data-lq-text="s|m|l"                    rescales text-*
+ * Each rescale restates explicit values (not a calc on a shared factor), so it works on
+ * whichever element carries the attribute. */
+@layer lq.base {
+  :root {
+    /* Type */
+    --lq-font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --lq-font-display: var(--lq-font-body);
+    --lq-font-mono: ui-monospace, "SFMono-Regular", "Cascadia Code", Menlo, Consolas, "Liberation Mono", monospace;
+    --lq-text-xs: 12px;
+    --lq-text-sm: 13px;
+    --lq-text-base: 15px;
+    --lq-text-lg: 17px;
+    --lq-text-xl: 20px;
+    --lq-text-2xl: 24px;
+    --lq-leading-tight: 1.25;
+    --lq-leading-normal: 1.6;
+
+    /* Space: 4px base */
+    --lq-space-1: 4px;
+    --lq-space-2: 8px;
+    --lq-space-3: 12px;
+    --lq-space-4: 16px;
+    --lq-space-5: 20px;
+    --lq-space-6: 24px;
+    --lq-space-7: 32px;
+    --lq-space-8: 40px;
+    --lq-space-9: 48px;
+    --lq-space-10: 64px;
+
+    /* Shape */
+    --lq-radius-sm: 6px;
+    --lq-radius-md: 8px;
+    --lq-radius-lg: 12px;
+    --lq-radius-xl: 16px;
+    --lq-radius-pill: 999px;
+
+    /* Elevation: neutral fallback; each theme tints its own */
+    --lq-shadow-1: 0 1px 2px rgb(20 20 22 / 0.05);
+    --lq-shadow-2: 0 1px 2px rgb(20 20 22 / 0.04), 0 4px 12px -2px rgb(20 20 22 / 0.08);
+    --lq-shadow-3: 0 2px 4px rgb(20 20 22 / 0.04), 0 12px 32px -8px rgb(20 20 22 / 0.16);
+
+    /* Motion */
+    --lq-duration-fast: 120ms;
+    --lq-duration-normal: 200ms;
+    --lq-ease: cubic-bezier(0.2, 0, 0, 1);
+
+    /* Layout */
+    --lq-content-width: 700px;
+    --lq-sidebar-width: 264px;
+  }
+
+  [data-lq-density="compact"] {
+    --lq-space-1: 3px;
+    --lq-space-2: 6px;
+    --lq-space-3: 8px;
+    --lq-space-4: 12px;
+    --lq-space-5: 16px;
+    --lq-space-6: 20px;
+    --lq-space-7: 24px;
+    --lq-space-8: 32px;
+    --lq-space-9: 40px;
+    --lq-space-10: 48px;
+  }
+
+  [data-lq-text="s"] {
+    --lq-text-xs: 11px;
+    --lq-text-sm: 12px;
+    --lq-text-base: 14px;
+    --lq-text-lg: 16px;
+    --lq-text-xl: 18px;
+    --lq-text-2xl: 22px;
+  }
+
+  [data-lq-text="l"] {
+    --lq-text-xs: 13px;
+    --lq-text-sm: 14px;
+    --lq-text-base: 17px;
+    --lq-text-lg: 19px;
+    --lq-text-xl: 22px;
+    --lq-text-2xl: 27px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --lq-duration-fast: 0ms;
+      --lq-duration-normal: 0ms;
+    }
+  }
+}

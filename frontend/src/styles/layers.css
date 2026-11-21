@@ -1,0 +1,4 @@
+/* Cascade layer order. Import this file first so every later @layer block lands in place:
+ * reset < base (scale tokens) < components < themes (color, font, shape tokens) < utilities.
+ * Unlayered rules (e.g. legacy styles.css) still beat every layer. */
+@layer lq.reset, lq.base, lq.components, lq.themes, lq.utilities;

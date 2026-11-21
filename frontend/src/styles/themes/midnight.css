@@ -1,0 +1,39 @@
+/* midnight: deep navy, electric-teal accent, Geist. Surfaces step up in small lightness
+ * increments (bg -> bg-subtle -> surface -> surface-raised).
+ * Colors mirror THEME_TOKENS.midnight in src/themes.ts (themes.test.ts keeps them in sync). */
+@layer lq.themes {
+  [data-lq-theme="midnight"] {
+    color-scheme: dark;
+
+    --lq-bg: #0b1020;
+    --lq-bg-subtle: #0e1428;
+    --lq-surface: #121a33;
+    --lq-surface-raised: #17213d;
+    --lq-border: #1c2440;
+    --lq-border-strong: #5a6792;
+    --lq-text: #e6e9f2;
+    --lq-text-muted: #9aa3bd;
+    --lq-text-subtle: #6e7896;
+    --lq-accent: #22d3ee;
+    --lq-accent-hover: #67e8f9;
+    --lq-accent-text: #04121a;
+    --lq-accent-soft: #22d3ee1f;
+    --lq-user-bubble: #172039;
+    --lq-user-bubble-text: #e6e9f2;
+    --lq-code-bg: #080c19;
+    --lq-focus-ring: #22d3ee;
+    --lq-success: #34d399;
+    --lq-warning: #fbbf24;
+    --lq-danger: #fb7185;
+    --lq-scrim: #02040ab3;
+
+    --lq-font-body: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --lq-font-display: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --lq-font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+    /* Navy-tinted depth with a faint cool top highlight. */
+    --lq-shadow-1: inset 0 1px 0 rgb(148 170 230 / 0.04), 0 1px 2px rgb(2 6 23 / 0.45);
+    --lq-shadow-2: inset 0 1px 0 rgb(148 170 230 / 0.05), 0 1px 2px rgb(2 6 23 / 0.4), 0 8px 22px -6px rgb(2 6 23 / 0.55);
+    --lq-shadow-3: inset 0 1px 0 rgb(148 170 230 / 0.06), 0 2px 4px rgb(2 6 23 / 0.4), 0 22px 52px -12px rgb(2 6 23 / 0.7);
+  }
+}
