@@ -54,7 +54,8 @@ async def test_index_injects_base_href(tmp_path, monkeypatch):
         r = await c.get("/api/nope")
         assert r.status_code == 404 and r.json() == {"error": "not_found"}
         assert (await c.get("/branding/logo")).status_code == 404
-        assert (await c.get("/branding/custom.css")).status_code == 404
+        r = await c.get("/branding/custom.css")  # unset: an empty stylesheet, not a 404
+        assert r.status_code == 200 and r.text == "" and r.headers["content-type"].startswith("text/css")
         assert (await c.get("/assets/%2e%2e/index.html")).status_code == 404
         assert (await c.get("/assets/a%00.js")).status_code == 404
 

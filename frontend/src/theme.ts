@@ -424,6 +424,15 @@ export function previewTheme(search: string, allowed: readonly ThemeId[]): Theme
   return isThemeId(id) && allowed.includes(id) ? id : null;
 }
 
+/**
+ * Preview > pref > default. An allowed `?theme=` is explicit and non-persistent, so it wins
+ * over any stored or session pref; without it the pref (then `default_theme`, then the
+ * system scheme) decides, as in resolveThemeId.
+ */
+export function effectiveThemeId(preview: ThemeId | null, pref: ThemePref | undefined, cfg: ThemeConfig, systemDark: boolean): ThemeId {
+  return resolveThemeId(preview ?? pref, cfg, systemDark);
+}
+
 // ---------- system scheme ----------
 
 function darkQuery(): MediaQueryList | null {

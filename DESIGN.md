@@ -219,10 +219,12 @@ token-list selector `[data-lq-part~="name"]`, never `=`:
 [data-lq-part~="activity"][data-lq-state="error"] {
   border-color: var(--lq-danger);
 }
-/* Re-colour with tokens, in one theme only. */
+/* Re-colour with tokens, in one theme only. If a brand key such as `theme.accent` sets the
+   same token, it is an inline style on <html> and beats this rule: add !important, or drop
+   the brand key. */
 [data-lq-theme="midnight"] {
-  --lq-accent: #a78bfa;
-  --lq-accent-text: #0b0618;
+  --lq-accent: #a78bfa !important;
+  --lq-accent-text: #0b0618 !important;
 }
 ```
 
@@ -304,6 +306,15 @@ Loquent's own CSS lives in cascade layers, in this order (lowest to highest prio
 layer** regardless of selector specificity: a plain `[data-lq-part~="composer"] { ... }` is
 enough.
 
+For colour and shape tokens there is one more tier, because the brand layer and user
+preferences are applied as inline styles on `<html>`. From strongest to weakest:
+
+1. `lock_tokens`: inline `!important`, so a locked token keeps its brand or theme value.
+2. The `theme` brand keys (and the user's accent pref): inline on `<html>`.
+3. Unlayered developer and user CSS. It beats the layers, but not an inline brand value for
+   the same token unless it uses `!important`.
+4. Loquent's `lq.*` layers, including the theme palettes.
+
 ### Internal variables are not API
 
 Variables that start with `--lqi-` (for example `--lqi-glow` or `--lqi-new-chat-bg`) are
@@ -313,8 +324,9 @@ disappear in any release. Do not depend on them; use the `--lq-*` tokens and the
 ### The legacy `theme` keys: a brand layer
 
 The `theme` setting (`accent`, `background`, `surface`, `text`, `muted`, `radius`, `font`) is
-a **brand layer** on top of the active theme: it sets the matching `--lq-*` tokens, above the
-theme and below user preferences and user CSS. Text on accent fills is black or white,
+a **brand layer** on top of the active theme: it sets the matching `--lq-*` tokens as inline
+styles on `<html>`, so it beats the theme and, for the same token, plain unlayered CSS (see
+the precedence above). `lock_tokens` is the only thing above it. Text on accent fills is black or white,
 whichever contrasts more. When you set `background`, the palette is yours in every theme and
 the remaining surfaces are derived from it. Readable text is enforced for derived colours:
 `text` is stepped to at least **4.5:1** and `text-subtle` to at least **3:1** on the

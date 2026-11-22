@@ -69,7 +69,7 @@ const NAMES = {
 };
 
 /** The current DESIGN.md text. */
-export const readDesign = () => readFileSync(DESIGN_PATH, "utf8");
+export const readDesign = () => readFileSync(DESIGN_PATH, "utf8").replace(/\r\n/g, "\n");
 
 const mark = (name, edge) => `<!-- gen:${name}:${edge} -->`;
 

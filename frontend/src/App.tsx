@@ -8,7 +8,7 @@ import { ThreadList } from "./components/ThreadList";
 import { part } from "./parts";
 import { appStore, type AppStore } from "./state/store";
 import { StoreProvider, useApp, useAppStore } from "./storeContext";
-import { allowedThemes, applyAppearance, previewTheme, resolveThemeId, useSystemDark, type ThemePref } from "./theme";
+import { allowedThemes, applyAppearance, effectiveThemeId, previewTheme, useSystemDark, type ThemePref } from "./theme";
 import type { ThemeId } from "./themes";
 
 const NAV_ID = "lq-nav";
@@ -202,9 +202,10 @@ function Shell() {
   useEffect(load, [load]);
 
   const themes = allowedThemes(config?.themes);
-  // `?theme=<id>` previews an allowed theme until the button is used; it is never stored.
+  // `?theme=<id>` previews an allowed theme and wins over any pref (preview > pref > default).
+  // It is never stored. Tasks 9/10: keep this precedence when prefs become persistent.
   const preview = previewTheme(window.location.search, themes);
-  const theme = resolveThemeId(pref ?? preview ?? undefined, { default_theme: config?.default_theme, themes }, dark);
+  const theme = effectiveThemeId(preview, pref, { default_theme: config?.default_theme, themes }, dark);
   const brand = config?.theme ?? null;
   const locks = config?.lock_tokens;
   useLayoutEffect(() => applyAppearance({ theme }, brand, document.documentElement, locks ?? []), [theme, brand, locks]);

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadThemeFonts } from "./fonts";
-import { applyAppearance, contrast, CUSTOM_ATTR, parseColor, resolveTheme, previewTheme, resolveThemeId, systemDark } from "./theme";
+import { applyAppearance, contrast, CUSTOM_ATTR, parseColor, resolveTheme, effectiveThemeId, previewTheme, resolveThemeId, systemDark } from "./theme";
 import { THEME_TOKENS, THEMES, type ThemeId } from "./themes";
 
 vi.mock("./fonts", () => ({ loadThemeFonts: vi.fn(async () => {}) }));
@@ -387,5 +387,14 @@ describe("previewTheme (?theme=)", () => {
     expect(previewTheme("?theme=editorial", allowed)).toBeNull();
     expect(previewTheme("?theme=nope", allowed)).toBeNull();
     expect(previewTheme("", allowed)).toBeNull();
+  });
+});
+
+describe("effectiveThemeId precedence", () => {
+  const cfg = { default_theme: "graphite", themes: ["graphite", "midnight", "editorial"] };
+  it("preview beats pref beats default", () => {
+    expect(effectiveThemeId("editorial", "midnight", cfg, false)).toBe("editorial");
+    expect(effectiveThemeId(null, "midnight", cfg, false)).toBe("midnight");
+    expect(effectiveThemeId(null, undefined, cfg, true)).toBe("graphite");
   });
 });

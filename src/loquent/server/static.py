@@ -82,7 +82,8 @@ def routes(settings: Settings) -> list[Route]:
     async def custom_css(request: Request) -> Response:
         p = settings.custom_css_path
         if p is None or not Path(p).is_file():
-            raise HTTPException(404)
+            # The page always links this stylesheet: an empty one keeps the console clean.
+            return Response("", media_type="text/css")
         return FileResponse(p, media_type="text/css")
 
     return [

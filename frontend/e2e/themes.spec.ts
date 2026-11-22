@@ -8,15 +8,16 @@ const SIZES = [
   { name: "mobile", width: 390, height: 844 },
 ] as const;
 
+// Relies on the default `themes` setting allowing all four themes.
 for (const id of THEMES) {
   test(`theme ${id}`, async ({ page }) => {
     const errors: string[] = [];
-    // The page always links branding/custom.css; the server answers 404 when none is configured,
-    // which Chromium logs as a console error. Known and unrelated to themes, so it is skipped.
-    const known = /branding\/custom\.css/;
-    page.on("console", (m) => m.type() === "error" && !known.test(m.text()) && errors.push(m.text()));
+    page.on("console", (m) => m.type() === "error" && errors.push(`${m.text()} ${m.location().url}`));
     page.on("pageerror", (e) => errors.push(e.message));
 
+    // Start from an empty thread list so earlier tests do not show in the screenshots.
+    const list = await page.request.get("/api/threads");
+    for (const t of await list.json()) await page.request.delete(`/api/threads/${t.id}`, { headers: { "X-Loquent-CSRF": "1" } });
     await page.setViewportSize({ width: SIZES[0].width, height: SIZES[0].height });
     await page.goto(`/?theme=${id}`);
     await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
