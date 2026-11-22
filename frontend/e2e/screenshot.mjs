@@ -48,7 +48,7 @@ async function send(page, text) {
 let browser;
 try {
   await waitForServer();
-  browser = await chromium.launch();
+  browser = await chromium.launch({ args: ["--disable-lcd-text"] });
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, colorScheme: "light" });
   await page.goto(`${base}/?theme=graphite`);
   const log = page.getByRole("log", { name: "Conversation" });

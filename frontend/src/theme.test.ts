@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadThemeFonts } from "./fonts";
+import graphiteCss from "./styles/themes/graphite.css?raw";
+import graphiteDarkCss from "./styles/themes/graphite-dark.css?raw";
 import layersCss from "./styles/layers.css?raw";
 import legacyCss from "./styles/legacy.css?raw";
 import {
@@ -12,6 +14,7 @@ import {
   resolveTheme,
   effectiveThemeId,
   previewTheme,
+  REFERENCE_SHADOWS,
   resolveThemeId,
   SYNTAX_ATTR,
   systemDark,
@@ -663,5 +666,56 @@ describe("derived text holds AA on every derived surface (M8)", () => {
       expect(bubble, `user-bubble-text on ${background}`).toBeGreaterThanOrEqual(4.5);
     }
     expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe("brand value sanitiser", () => {
+  const BAD = ["red;}</style><script>", "#fff !important", "Inter(", '"Inter', "a\\b", "/* x */"];
+  const GOOD = ["#fff", "rgb(1 2 3 / 50%)", '"Inter Variable", "Inter", sans-serif', "8px", "color-mix(in srgb, #fff 10%, #000)"];
+  const sheet = () => document.getElementById("lq-brand")?.textContent ?? "";
+
+  afterEach(() => {
+    document.getElementById("lq-brand")?.remove();
+  });
+
+  it.each(BAD)("rejects %j and keeps the other brand values", (bad) => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    applyBrand({ accent: "#e11d48", radius: "8px", font: bad });
+    const css = sheet();
+    expect(css).not.toContain(bad);
+    expect(css).not.toMatch(/--lq-font-body/);
+    expect(css).toContain("--lq-radius-md");
+    expect(css).toContain("#e11d48");
+    expect(css).not.toContain("!important");
+    expect(warn).toHaveBeenCalled();
+  });
+
+  it.each(GOOD)("accepts %j", (good) => {
+    applyBrand({ font: good });
+    expect(sheet()).toContain(`--lq-font-body: ${good};`);
+  });
+});
+
+describe("brand-scheme shadows", () => {
+  const dir = (id: ThemeId) => ({ graphite: graphiteCss, "graphite-dark": graphiteDarkCss })[id as "graphite"];
+
+  it("reference shadows match the theme CSS", () => {
+    for (const id of ["graphite", "graphite-dark"] as const) {
+      for (const [name, v] of Object.entries(REFERENCE_SHADOWS[id])) {
+        expect(dir(id), `${id} ${name}`).toContain(`${name}: ${v};`);
+      }
+    }
+  });
+
+  it("a brand scheme opposite to the theme takes the scheme-matched reference shadows", () => {
+    expect(resolveTheme({ background: "#ffffff" }, "midnight").vars).toMatchObject(REFERENCE_SHADOWS.graphite);
+    expect(resolveTheme({ background: "#0f172a" }, "graphite").vars).toMatchObject(REFERENCE_SHADOWS["graphite-dark"]);
+    expect(resolveTheme({ background: "#0f172a" }, "editorial").vars).toMatchObject(REFERENCE_SHADOWS["graphite-dark"]);
+  });
+
+  it("the theme's own shadows stay when the scheme matches or there is no brand background", () => {
+    expect(resolveTheme({ background: "#0f172a" }, "midnight").vars["--lq-shadow-1"]).toBeUndefined();
+    expect(resolveTheme({ background: "#ffffff" }, "graphite").vars["--lq-shadow-2"]).toBeUndefined();
+    expect(resolveTheme({ accent: "#e11d48" }, "midnight").vars["--lq-shadow-3"]).toBeUndefined();
   });
 });

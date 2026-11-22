@@ -128,6 +128,7 @@
     border: 0;
     border-radius: inherit;
     background: none;
+    color: var(--lq-text);
     font-weight: inherit;
     line-height: var(--lq-leading-tight);
     text-align: left;

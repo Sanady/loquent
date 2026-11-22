@@ -242,6 +242,20 @@ export function brandScheme(brand: Record<string, string> | null | undefined): C
   return bg ? (isDark(bg) ? "dark" : "light") : null;
 }
 
+/** The scheme reference themes' shadow tokens (kept equal to styles/themes/*.css by a test). */
+export const REFERENCE_SHADOWS = {
+  graphite: {
+    "--lq-shadow-1": "0 1px 1px rgb(41 37 30 / 0.03), 0 1px 2px rgb(41 37 30 / 0.04)",
+    "--lq-shadow-2": "0 1px 2px rgb(41 37 30 / 0.04), 0 4px 10px -2px rgb(41 37 30 / 0.06), 0 10px 20px -8px rgb(41 37 30 / 0.06)",
+    "--lq-shadow-3": "0 2px 4px rgb(41 37 30 / 0.04), 0 12px 24px -6px rgb(41 37 30 / 0.08), 0 28px 56px -16px rgb(41 37 30 / 0.12)",
+  },
+  "graphite-dark": {
+    "--lq-shadow-1": "inset 0 1px 0 rgb(255 255 255 / 0.03), 0 1px 2px rgb(4 4 6 / 0.4)",
+    "--lq-shadow-2": "inset 0 1px 0 rgb(255 255 255 / 0.04), 0 1px 2px rgb(4 4 6 / 0.35), 0 8px 20px -6px rgb(4 4 6 / 0.5)",
+    "--lq-shadow-3": "inset 0 1px 0 rgb(255 255 255 / 0.05), 0 2px 4px rgb(4 4 6 / 0.35), 0 20px 48px -12px rgb(4 4 6 / 0.65)",
+  },
+} as const;
+
 /**
  * Turn `config.theme` into theme tokens for the given theme.
  *
@@ -390,6 +404,10 @@ export function resolveTheme(theme: Record<string, string> | null | undefined, t
     vars[`--lq-${role}`] = floorOn.length ? toHex(withFloor(start, floorOn, 4.5)) : reference[role];
   }
 
+  // A brand scheme opposite to the theme's own would keep that theme's shadows (midnight's
+  // heavy dark ones under a white brand): take them from the scheme-matched reference too.
+  if (bg && dark !== (THEME_SCHEME[id] === "dark")) Object.assign(vars, REFERENCE_SHADOWS[dark ? "graphite-dark" : "graphite"]);
+
   // Code keeps the theme's syntax colors only while each holds 4.5:1 on the brand code-bg.
   const monoCode = !codeBg || Object.values(THEME_SYNTAX[id]).some((c) => contrast(parseColor(c)!, codeBg) < 4.5);
 
@@ -409,9 +427,43 @@ export interface Appearance {
   accent?: string;
 }
 
+/** True when every `()[]` and quote pair in `value` is closed (a quoted string hides its contents). */
+function balanced(value: string): boolean {
+  const stack: string[] = [];
+  const close: Record<string, string> = { "(": ")", "[": "]" };
+  let quote = "";
+  for (const ch of value) {
+    if (quote) {
+      if (ch === quote) quote = "";
+    } else if (ch === '"' || ch === "'") quote = ch;
+    else if (ch in close) stack.push(close[ch]);
+    else if (ch === ")" || ch === "]") {
+      if (stack.pop() !== ch) return false;
+    }
+  }
+  return !quote && stack.length === 0;
+}
+
+/** True when a `!` sits outside quotes and brackets' strings (a quoted "!" is plain text). */
+function hasBang(value: string): boolean {
+  let quote = "";
+  for (const ch of value) {
+    if (quote) {
+      if (ch === quote) quote = "";
+    } else if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === "!") return true;
+  }
+  return false;
+}
+
 /** A value that could break out of its declaration is dropped (and reported once). */
 function safeValue(name: string, value: string): boolean {
-  if (!/[;{}<>\\]|\/\*/.test(value)) return true;
+  const ok =
+    !/[;{}<>`\\]|\/\*/.test(value) &&
+    !hasBang(value) &&
+    balanced(value) &&
+    (typeof CSS === "undefined" || typeof CSS.supports !== "function" || CSS.supports("--x", value));
+  if (ok) return true;
   warnOnce(`unsafe|${name}|${value}`, `loquent theme: ignored ${name} value ${JSON.stringify(value)} (not a single CSS value).`);
   return false;
 }
