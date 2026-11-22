@@ -129,6 +129,20 @@ describe("Composer", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  it("send is disabled while the previous run's stream is still open (busy), not Stop", () => {
+    const store = readyStore({ view: view([userMsg("u1", "x")], "idle"), busy: true });
+    const send = vi.fn(async () => false);
+    store.setState({ send });
+    const box = renderComposer(store);
+    fireEvent.change(box, { target: { value: "hi" } });
+    const btn = screen.getByRole("button", { name: "Send message" }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(send).not.toHaveBeenCalled();
+    act(() => store.setState({ busy: false }));
+    expect(btn.disabled).toBe(false);
+  });
+
   it("attach button only when config.attachments; files can be sent alone", () => {
     const store = readyStore();
     renderComposer(store);

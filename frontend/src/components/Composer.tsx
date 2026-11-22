@@ -19,6 +19,8 @@ export function Composer() {
   const store = useAppStore();
   const starting = useApp((s) => s.starting);
   const running = useApp((s) => s.view.run === "running");
+  // The store refuses a send while busy (e.g. the last run's stream is still closing).
+  const locked = useApp((s) => s.busy);
   const attachments = useApp((s) => s.config?.attachments ?? false);
   const maxMb = useApp((s) => s.config?.max_upload_mb ?? 0);
   const allowedTypes = useApp((s) => s.config?.allowed_upload_types);
@@ -61,7 +63,7 @@ export function Composer() {
 
   const busy = starting || running;
   const hasContent = text.trim() !== "" || files.length > 0;
-  const canSubmit = !busy && hasContent;
+  const canSubmit = !busy && !locked && hasContent;
 
   // Grow with the content up to a cap, then scroll.
   useLayoutEffect(() => {

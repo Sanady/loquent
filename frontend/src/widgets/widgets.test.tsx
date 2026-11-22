@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { StoreProvider } from "../storeContext";
 import type { AppStore } from "../state/store";
 import type { Item } from "../state/reducer";
-import { readyStore, view } from "../test/helpers";
+import { defaultConfig, fakeApi, readyStore, view } from "../test/helpers";
 import { MessageList } from "../components/MessageList";
 import { renderWidget, type WidgetItem } from "./registry";
 
@@ -217,6 +217,43 @@ describe("MessageList integration", () => {
     expect(btns).toHaveLength(2);
     expect(btns[0]!.disabled).toBe(true);
     expect(btns[1]!.disabled).toBe(false);
+  });
+
+  it("stays disabled after RUN_FINISHED until the run's stream closes, then the answer goes through", async () => {
+    // The server sends RUN_FINISHED, then saves the run, then closes the stream. Until it
+    // closes, the store refuses a new run, so the widget must not look answerable.
+    let close!: () => void;
+    const closed = new Promise<void>((r) => (close = r));
+    const startRun = vi.fn((_body: unknown) =>
+      (async function* () {
+        let seq = 0;
+        const ev = (event: Record<string, unknown>) => ({ seq: ++seq, event });
+        yield ev({ type: "RUN_STARTED", threadId: "t1", runId: "r1" });
+        yield ev({ type: "TOOL_CALL_START", toolCallId: "c1", toolCallName: "loquent_confirm" });
+        yield ev({ type: "TOOL_CALL_ARGS", toolCallId: "c1", delta: JSON.stringify({ message: "Refund $42?", confirmLabel: "Approve", rejectLabel: "Reject" }) });
+        yield ev({ type: "TOOL_CALL_END", toolCallId: "c1" });
+        yield ev({ type: "RUN_FINISHED", outcome: { type: "success", pendingToolCallIds: ["c1"] } });
+        if (startRun.mock.calls.length === 1) await closed;
+      })(),
+    );
+    const store = readyStore({}, fakeApi(defaultConfig({ widgets: true }), { startRun }));
+    render(
+      <StoreProvider store={store}>
+        <MessageList />
+      </StoreProvider>,
+    );
+    void act(() => void store.getState().send("refund", []));
+    const approve = (await screen.findByRole("button", { name: "Approve" })) as HTMLButtonElement;
+    await waitFor(() => expect(store.getState().view.run).toBe("idle"));
+    expect(approve.disabled).toBe(true);
+    fireEvent.click(approve);
+    expect(startRun).toHaveBeenCalledTimes(1);
+
+    await act(async () => close());
+    await waitFor(() => expect(approve.disabled).toBe(false));
+    fireEvent.click(approve);
+    await waitFor(() => expect(startRun).toHaveBeenCalledTimes(2));
+    expect(startRun.mock.calls[1]![0]).toMatchObject({ input: { type: "tool_result", tool_call_id: "c1", answer: { confirmed: true } } });
   });
 });
 

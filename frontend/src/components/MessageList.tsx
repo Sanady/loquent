@@ -15,13 +15,13 @@ function lastAssistantIndex(items: Item[]): number {
 }
 
 /** An error in the conversation. The one that ended a failed run carries its Retry. */
-function ErrorItem({ item, onRetry }: { item: Extract<Item, { kind: "error" }>; onRetry?: () => void }) {
+function ErrorItem({ item, onRetry, busy }: { item: Extract<Item, { kind: "error" }>; onRetry?: () => void; busy?: boolean }) {
   return (
     <div className="lq-error" {...part("error", { state: "error" })}>
       <IconAlert />
       <span className="lq-error-text">{item.message}</span>
       {onRetry && (
-        <button type="button" className="lq-btn lq-btn-sm" onClick={onRetry}>
+        <button type="button" className="lq-btn lq-btn-sm" onClick={onRetry} disabled={busy}>
           <IconRefresh />
           Retry
         </button>
@@ -60,6 +60,8 @@ export function EmptyState({ suggestions = [] }: { suggestions?: readonly string
 export function MessageList() {
   const view = useApp((s) => s.view);
   const starting = useApp((s) => s.starting);
+  // Regenerate/Retry are refused while busy (e.g. the last run's stream is still closing).
+  const busy = useApp((s) => s.busy);
   const regenerate = useApp((s) => s.regenerate);
   const { items, run } = view;
   const running = run === "running";
@@ -96,7 +98,7 @@ export function MessageList() {
                 item={it}
                 actions={
                   i === regenAt ? (
-                    <button type="button" className="lq-action" onClick={() => void regenerate()} aria-label="Regenerate response" title="Regenerate">
+                    <button type="button" className="lq-action" onClick={() => void regenerate()} disabled={busy} aria-label="Regenerate response" title="Regenerate">
                       <IconRefresh />
                     </button>
                   ) : undefined
@@ -115,6 +117,7 @@ export function MessageList() {
                 key={`e-${i}`}
                 item={it}
                 onRetry={retryOnError && i === items.length - 1 ? () => void regenerate() : undefined}
+                busy={busy}
               />
             );
           default:
@@ -131,7 +134,7 @@ export function MessageList() {
       {!starting && !retryOnError && (run === "failed" || run === "interrupted") && (
         <div className="lq-run-note">
           <span>{run === "interrupted" ? "The response was interrupted." : "The response did not finish."}</span>
-          <button type="button" className="lq-btn lq-btn-quiet" onClick={() => void regenerate()}>
+          <button type="button" className="lq-btn lq-btn-quiet" onClick={() => void regenerate()} disabled={busy}>
             <IconRefresh />
             Retry
           </button>
