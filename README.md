@@ -490,7 +490,9 @@ export LOQUENT_HIDE='["thread_list"]'
 - **Themes:** the UI ships four themes: `graphite`, `graphite-dark`, `editorial` and
   `midnight`. `themes` lists the ones users may pick, and `default_theme` picks the
   starting one. The default, `system`, follows the device's light/dark setting within
-  `themes` (`graphite` and `midnight` by default).
+  `themes` (`graphite` and `midnight` by default). Open `/?theme=editorial` to preview a
+  theme without changing any setting: it works only for ids in `themes`, is never stored,
+  and is meant for previews and screenshots.
 - **`theme`** keys: `accent`, `background`, `surface`, `text`, `muted`, `radius` and `font`.
   They are a brand layer on top of the active theme, setting the CSS variables
   `--lq-accent`, `--lq-bg`, `--lq-surface`, `--lq-text`, `--lq-text-muted`, the
@@ -504,9 +506,23 @@ export LOQUENT_HIDE='["thread_list"]'
   brand color. Locking `accent` also locks `accent-hover`, `accent-soft` and `accent-text`.
 - **`logo_path`**: an image file shown in the header (served at `branding/logo`).
 - **`custom_css_path`**: a stylesheet served at `branding/custom.css` and loaded after the
-  built-in styles, so it can override anything. The UI's classes start with `lq-`.
+  built-in styles, so it can override anything. Style the UI through its stable named
+  parts, tokens and states, described in the [design system](https://github.com/Sanady/loquent/blob/main/DESIGN.md).
 - **`hide`**: UI parts to hide. `thread_list` removes the chat list sidebar.
 - **`app_name`**: shown in the header and the browser tab. The default is `Chat`.
+
+Every part of the UI carries a `data-lq-part` token list. Select it with `~=`, because one
+element can have several parts:
+
+```css
+/* static/acme.css */
+[data-lq-part~="composer"] { border-radius: var(--lq-radius-xl); }
+[data-lq-part~="activity"][data-lq-state="error"] { border-color: var(--lq-danger); }
+```
+
+The [design system](https://github.com/Sanady/loquent/blob/main/DESIGN.md) lists the
+four themes, every color token, all parts and states, and the contract version. Variables
+starting with `--lqi-` are internal: do not depend on them.
 
 Because of the CSP, fonts, images and stylesheets must come from the app's own origin. A
 `font` naming a web font works only if `custom_css_path` loads it with `@font-face` from a

@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "e2e": "npm run build && playwright test",
-    "screenshot": "node e2e/screenshot.mjs"
+    "screenshot": "node e2e/screenshot.mjs",
+    "gen:design": "node scripts/gen_design_md.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist": "5.3.0",

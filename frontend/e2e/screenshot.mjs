@@ -1,4 +1,4 @@
-// Takes the README screenshot: docs/assets/loquent-chat.png (1280x800, light theme).
+// Takes the README screenshot: docs/assets/loquent-chat.png (1280x800, graphite theme).
 //
 // Run with `npm run screenshot` after `npm run build`. Like the e2e tests (see
 // playwright.config.ts) it serves the fixture agent, e2e/fixtures/agent.py, from the built
@@ -50,7 +50,7 @@ try {
   await waitForServer();
   browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, colorScheme: "light" });
-  await page.goto(base);
+  await page.goto(`${base}/?theme=graphite`);
   const log = page.getByRole("log", { name: "Conversation" });
 
   await send(page, "Hi there!");
@@ -59,6 +59,7 @@ try {
 
   await send(page, "I was charged twice for order #1042. Can you refund the duplicate?");
   await log.getByRole("button", { name: "Approve" }).waitFor();
+  await page.evaluate(() => document.fonts.ready);
   await page.mouse.move(0, 0); // no hover styles in the shot
   await page.waitForTimeout(500); // let entry animations settle
 
