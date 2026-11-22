@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0](https://github.com/Sanady/loquent/compare/v0.1.0...v0.2.0) (2026-11-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* **ui:** professional redesign with four themes ([#6](https://github.com/Sanady/loquent/issues/6))
+
+### Features
+
+* **ui:** professional redesign with four themes ([#6](https://github.com/Sanady/loquent/issues/6)) ([95d5507](https://github.com/Sanady/loquent/commit/95d5507229b521de95657419968331664e6b4eda))
+
 ## 0.1.0 (2026-11-21)
 
 

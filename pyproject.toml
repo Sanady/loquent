@@ -1,6 +1,6 @@
 [project]
 name = "loquent"
-version = "0.1.0"
+version = "0.2.0"
 description = "Chat UI for any LLM or AI agent in a few lines of Python. AG-UI native, Chainlit alternative."
 license = "Apache-2.0"
 license-files = ["LICENSE"]
