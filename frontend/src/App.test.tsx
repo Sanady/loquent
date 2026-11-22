@@ -52,6 +52,37 @@ describe("App", () => {
     expect(title()).toBe("Second chat");
   });
 
+  it("the header title follows a rename of the open thread and falls back to the app name on delete", async () => {
+    let list = [...threads];
+    const { api } = await renderApp(defaultConfig({ app_name: "Acme Assistant" }), {
+      threads: vi.fn(async () => list),
+      renameThread: vi.fn(async (id: string, title: string) => {
+        list = list.map((t) => (t.id === id ? { ...t, title } : t));
+        return {};
+      }),
+      deleteThread: vi.fn(async (id: string) => {
+        list = list.filter((t) => t.id !== id);
+      }),
+    });
+    const title = () => screen.getByRole("banner").querySelector('[data-lq-part~="header-title"]')!.textContent;
+    fireEvent.click(await screen.findByRole("button", { name: "Second chat" }));
+    await vi.waitFor(() => expect(title()).toBe("Second chat"));
+    await act(async () => {
+      await api.thread.mock.results[0].value;
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Rename Second chat" }));
+    const input = screen.getByRole("textbox", { name: "Chat title" });
+    fireEvent.change(input, { target: { value: "Billing question" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await vi.waitFor(() => expect(title()).toBe("Billing question"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Billing question" }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm delete/i }));
+    await vi.waitFor(() => expect(api.deleteThread).toHaveBeenCalledWith("t2"));
+    await vi.waitFor(() => expect(title()).toBe("Acme Assistant"));
+  });
+
   it("with the chat list hidden, the header shows the logo", async () => {
     await renderApp(defaultConfig({ app_name: "Acme Assistant", logo_url: "branding/logo", hide: ["thread_list"] }));
     const banner = screen.getByRole("banner");
