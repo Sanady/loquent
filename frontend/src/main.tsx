@@ -4,6 +4,8 @@ import { createRoot } from "react-dom/client";
 // layered). Third-party CSS below is unlayered.
 import "./styles/layers.css";
 import "./styles/tokens.css";
+// Deprecated 0.1 token names, read-only aliases (not part of the contract).
+import "./styles/legacy.css";
 import "./styles/themes/graphite.css";
 import "./styles/themes/graphite-dark.css";
 import "./styles/themes/editorial.css";

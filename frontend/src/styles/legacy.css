@@ -1,0 +1,19 @@
+/* Deprecated read aliases for the release 0.1 token names, so custom CSS written against 0.1
+ * keeps reading sensible values after upgrading. They are NOT part of the styling contract
+ * (not in the contract snapshot), no Loquent component reads them, and they will be removed
+ * in a future major release. Setting one changes nothing: set the new token instead (see
+ * "Upgrading from 0.1" in DESIGN.md). Restated on the app root so they follow a token that
+ * custom CSS overrides there. */
+@layer lq.base {
+  /* alias:start */
+  :root,
+  [data-lq-part~="app"] {
+    --lq-background: var(--lq-bg);
+    --lq-muted: var(--lq-text-muted);
+    --lq-radius: var(--lq-radius-lg);
+    --lq-font: var(--lq-font-body);
+    --lq-on-accent: var(--lq-accent-text);
+    --lq-elevated: var(--lq-surface-raised);
+  }
+  /* alias:end */
+}

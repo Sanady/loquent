@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import mainSrc from "./main.tsx?raw";
 
-// Every component stylesheet, read as text. vite.config.ts css.include lets these through.
+// Every stylesheet and component source, read as text. vite.config.ts css.include lets these through.
+const ALL_CSS = import.meta.glob<string>("./styles/**/*.css", { query: "?raw", import: "default", eager: true });
+const ALL_TSX = import.meta.glob<string>(["./**/*.tsx", "!./**/*.test.tsx"], { query: "?raw", import: "default", eager: true });
+
+/** Release 0.1 token names; styles/legacy.css keeps them as deprecated read aliases only. */
+const OLD_NAMES = ["--lq-background", "--lq-muted", "--lq-radius", "--lq-font", "--lq-on-accent", "--lq-elevated"];
+const oldNameRe = new RegExp(`(?:${OLD_NAMES.join("|")})(?![\\w-])`);
+
 const COMPONENT_CSS = import.meta.glob<string>("./styles/components/*.css", { query: "?raw", import: "default", eager: true });
 
 const SHELL_FILES = ["shell", "sidebar", "header", "composer", "empty", "login", "drawer"];
@@ -120,6 +127,30 @@ describe("component css", () => {
     const forced = /@media\s*\(forced-colors:\s*active\)\s*\{([\s\S]*?)\n {2}\}/.exec(css)?.[1] ?? "";
     expect(forced, "activity.css needs a forced-colors block").toContain(".lq-activity-dot");
     expect(forced).toMatch(/border:\s*4px solid;|forced-color-adjust:\s*none/);
+  });
+
+  it("nothing reads the release 0.1 token names except the deprecated alias block", () => {
+    for (const [path, css] of Object.entries(ALL_CSS)) {
+      const body = stripComments(path.endsWith("/legacy.css") ? css.replace(/\/\* alias:start \*\/[\s\S]*?\/\* alias:end \*\//, "") : css);
+      expect(body, path).not.toMatch(oldNameRe);
+    }
+    for (const [path, src] of Object.entries(ALL_TSX)) expect(src, path).not.toMatch(oldNameRe);
+  });
+
+  it("legacy.css aliases each old name in lq.base, and nothing else", () => {
+    const css = ALL_CSS["./styles/legacy.css"];
+    expect(css, "styles/legacy.css").toBeDefined();
+    expect(stripComments(css).trimStart()).toMatch(/^@layer lq\.base\s*\{/);
+    const aliases = Object.fromEntries([...stripComments(css).matchAll(/(--lq-[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+    expect(aliases).toEqual({
+      "--lq-background": "var(--lq-bg)",
+      "--lq-muted": "var(--lq-text-muted)",
+      "--lq-radius": "var(--lq-radius-lg)",
+      "--lq-font": "var(--lq-font-body)",
+      "--lq-on-accent": "var(--lq-accent-text)",
+      "--lq-elevated": "var(--lq-surface-raised)",
+    });
+    expect(mainSrc.indexOf('"./styles/legacy.css"')).toBeGreaterThan(mainSrc.indexOf('"./styles/tokens.css"'));
   });
 
   it("main.tsx imports the stylesheets in cascade order", () => {

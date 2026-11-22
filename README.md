@@ -490,26 +490,31 @@ export LOQUENT_HIDE='["thread_list"]'
 - **Themes:** the UI ships four themes: `graphite`, `graphite-dark`, `editorial` and
   `midnight`. `themes` lists the ones users may pick, and `default_theme` picks the
   starting one. The default, `system`, follows the device's light/dark setting within
-  `themes` (`graphite` and `midnight` by default). Open `/?theme=editorial` to preview a
+  `themes` (`graphite` and `midnight` by default); with a `theme.background` it follows
+  your background's scheme instead. Open `/?theme=editorial` to preview a
   theme without changing any setting: it works only for ids in `themes`, is never stored,
   and is meant for previews and screenshots.
 - **`theme`** keys: `accent`, `background`, `surface`, `text`, `muted`, `radius` and `font`.
   They are a brand layer on top of the active theme, setting the CSS variables
   `--lq-accent`, `--lq-bg`, `--lq-surface`, `--lq-text`, `--lq-text-muted`, the
-  `--lq-radius-*` scale and `--lq-font-body`. Text on the accent color is black or white,
-  whichever contrasts more. `accent` applies in every theme.
+  `--lq-radius-*` scale and `--lq-font-body` / `--lq-font-display`. Text on the accent color
+  is black or white, whichever contrasts more, and the focus ring follows the accent.
+  `accent` applies in every theme. Your `custom_css_path` stylesheet beats the brand layer.
 - **Dark themes:** your other colors carry into dark themes only when you set
   `background`. Then the palette is yours in every theme: any missing `text`, `muted` and
   `surface` are derived from the background for contrast. Without `background`, those
   colors adjust light themes only, and dark themes keep their own palette.
 - **`lock_tokens`**: color tokens users may not change, such as `["accent"]` to keep the
-  brand color. Locking `accent` also locks `accent-hover`, `accent-soft` and `accent-text`.
-- **`logo_path`**: an image file shown in the header (served at `branding/logo`).
+  brand color. Locking `accent` also locks `accent-hover`, `accent-soft`, `accent-text` and
+  `focus-ring`. A locked token holds against any user CSS.
+- **`logo_path`**: an image file shown with the app name at the top of the chat list
+  sidebar, or in the header when the chat list is hidden (served at `branding/logo`).
 - **`custom_css_path`**: a stylesheet served at `branding/custom.css` and loaded after the
   built-in styles, so it can override anything. Style the UI through its stable named
   parts, tokens and states, described in the [design system](https://github.com/Sanady/loquent/blob/main/DESIGN.md).
 - **`hide`**: UI parts to hide. `thread_list` removes the chat list sidebar.
-- **`app_name`**: shown in the header and the browser tab. The default is `Chat`.
+- **`app_name`**: shown at the top of the sidebar (in the header when the chat list is
+  hidden or no chat is open) and in the browser tab. The default is `Chat`.
 
 Every part of the UI carries a `data-lq-part` token list. Select it with `~=`, because one
 element can have several parts:
@@ -517,7 +522,7 @@ element can have several parts:
 ```css
 /* static/acme.css */
 [data-lq-part~="composer"] { border-radius: var(--lq-radius-xl); }
-[data-lq-part~="activity"][data-lq-state="error"] { border-color: var(--lq-danger); }
+[data-lq-part~="activity"][data-lq-state="stopped"] { border-color: var(--lq-danger); }
 ```
 
 The [design system](https://github.com/Sanady/loquent/blob/main/DESIGN.md) lists the
@@ -527,6 +532,25 @@ starting with `--lqi-` are internal: do not depend on them.
 Because of the CSP, fonts, images and stylesheets must come from the app's own origin. A
 `font` naming a web font works only if `custom_css_path` loads it with `@font-face` from a
 local file.
+
+### Upgrading from 0.1
+
+The UI was redesigned around themes and a styling contract, so CSS written for 0.1 needs a
+look:
+
+- **Token names changed.** `--lq-background`, `--lq-muted`, `--lq-radius`, `--lq-font`,
+  `--lq-on-accent` and `--lq-elevated` still *read* sensible values (deprecated aliases, to
+  be removed in a future major release), but setting them does nothing. Set the new tokens
+  instead (`--lq-bg`, `--lq-text-muted`, `--lq-radius-lg`, `--lq-font-body`,
+  `--lq-accent-text`, `--lq-surface-raised`). The full map is in
+  [DESIGN.md](https://github.com/Sanady/loquent/blob/main/DESIGN.md#upgrading-from-01).
+- **Markup changed.** Target the `data-lq-part` parts and `data-lq-state` states, not
+  `lq-*` class names, which are internal and may change.
+- **The light/dark toggle is gone**, and with it the `lq-color-mode` browser setting:
+  users pick a theme instead. `system` follows the device, or your `theme.background`.
+- **A brand `background` no longer hides the toggle**: it keeps your palette in every theme.
+- **`custom_css_path`** set to a missing file is a 404 (with a startup warning); unset, the
+  stylesheet is empty.
 
 ## Settings
 
@@ -550,17 +574,17 @@ environment variables are JSON, for example `LOQUENT_CORS_ORIGINS='["https://app
 | `frame_ancestors` | `LOQUENT_FRAME_ANCESTORS` |  | `[]` | CSP `frame-ancestors` sources allowed to embed the UI in an iframe. Empty: `'none'`. |
 | `max_upload_mb` | `LOQUENT_MAX_UPLOAD_MB` |  | `20` | Largest accepted upload, in MB. |
 | `allowed_upload_types` | `LOQUENT_ALLOWED_UPLOAD_TYPES` |  | see below | Accepted upload content types. The UI refuses other files before uploading. |
-| `app_name` | `LOQUENT_APP_NAME` |  | `Chat` | Name shown in the header and the browser tab. |
-| `logo_path` | `LOQUENT_LOGO_PATH` |  | unset | Image file shown as the logo. |
+| `app_name` | `LOQUENT_APP_NAME` |  | `Chat` | Name shown at the top of the sidebar (in the header when the chat list is hidden or no chat is open) and in the browser tab. |
+| `logo_path` | `LOQUENT_LOGO_PATH` |  | unset | Image file shown as the logo, beside the app name in the sidebar. |
 | `theme` | `LOQUENT_THEME` |  | `{}` | Design tokens; see [Theming and branding](#theming-and-branding). |
 | `custom_css_path` | `LOQUENT_CUSTOM_CSS_PATH` |  | unset | Stylesheet loaded after the built-in styles. |
 | `hide` | `LOQUENT_HIDE` |  | `[]` | UI parts to hide. Supported: `thread_list`. |
 | `default_theme` | `LOQUENT_DEFAULT_THEME` |  | `system` | Starting theme: `graphite`, `graphite-dark`, `editorial`, `midnight`, or `system` (follows the device's light/dark setting). Must be in `themes` unless `system`. |
 | `themes` | `LOQUENT_THEMES` |  | all four | Themes users may pick, in display order. At least one. |
-| `allow_user_css` | `LOQUENT_ALLOW_USER_CSS` |  | `true` | Let chat users add their own CSS. |
-| `allow_user_prefs` | `LOQUENT_ALLOW_USER_PREFS` |  | `true` | Let chat users change their appearance (theme, density, text size, accent). |
+| `allow_user_css` | `LOQUENT_ALLOW_USER_CSS` |  | `true` | Let chat users add their own CSS. Takes effect with the Appearance panel (coming). |
+| `allow_user_prefs` | `LOQUENT_ALLOW_USER_PREFS` |  | `true` | Let chat users change their appearance (theme, density, text size, accent). Takes effect with the Appearance panel (coming). |
 | `lock_tokens` | `LOQUENT_LOCK_TOKENS` |  | `[]` | Color tokens users may not change, such as `["accent"]`. |
-| `max_user_css_kb` | `LOQUENT_MAX_USER_CSS_KB` |  | `64` | Largest user stylesheet, in KB. |
+| `max_user_css_kb` | `LOQUENT_MAX_USER_CSS_KB` |  | `64` | Largest user stylesheet, in KB. Takes effect with the Appearance panel (coming). |
 | `forward_headers` | `LOQUENT_FORWARD_HEADERS` |  | `[]` | Request headers passed to the agent in `ctx.forwarded_props["headers"]`. `Cookie`, `Authorization` and `X-Loquent-CSRF` are never forwarded. |
 | `widgets` | `LOQUENT_WIDGETS` | `--no-widgets` | `true` | Offer the widget tools to the agent. Turn off for backends that reject tools. |
 | `model` | `LOQUENT_MODEL` | `--model` | unset | With a URL target: the model name, which selects the OpenAI-compatible adapter. |

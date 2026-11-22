@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadThemeFonts } from "./fonts";
 import layersCss from "./styles/layers.css?raw";
+import legacyCss from "./styles/legacy.css?raw";
 import {
   applyAppearance,
   contrast,
@@ -567,6 +568,22 @@ describe("cascade layers: brand below dev CSS, locks above everything (Q15)", ()
     try {
       applyAppearance({ theme: "graphite" }, { accent: "#e11d48" });
       expect(css("--lq-accent", root)).toBe("#123456");
+    } finally {
+      done();
+      applyAppearance({ theme: "graphite" }, null);
+    }
+  });
+
+  it("the deprecated 0.1 names read the new tokens, brand included", () => {
+    const { root, done } = mount(`${THEME_RULES.graphite} ${legacyCss}`);
+    root.setAttribute("data-lq-part", "app");
+    try {
+      applyAppearance({ theme: "graphite" }, { background: "#0f172a", radius: "4px" });
+      expect(css("--lq-background", root)).toBe("#0f172a");
+      expect(css("--lq-muted", root)).toBe(css("--lq-text-muted", root));
+      expect(css("--lq-elevated", root)).toBe(css("--lq-surface-raised", root));
+      expect(css("--lq-on-accent", root)).toBe(css("--lq-accent-text", root));
+      expect(css("--lq-radius", root)).toBe("4px");
     } finally {
       done();
       applyAppearance({ theme: "graphite" }, null);

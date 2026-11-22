@@ -376,3 +376,43 @@ its floor.
 `/?theme=<id>` previews a theme without changing any setting. It is honoured only when the id
 is in the server's allowed `themes`, it is never stored, and reloading without it returns to
 the normal choice. It is meant for previews and screenshots.
+
+### Upgrading from 0.1
+
+Release 0.1 had one stylesheet, a light/dark toggle and a handful of `--lq-*` variables. The
+redesign replaces them with four themes, the token set above and the parts contract.
+
+**Token map.** The names marked *alias* still read the new token through a deprecated alias
+(`styles/legacy.css`, layer `lq.base`, on `:root` and the `app` part). Aliases are read-only,
+not part of the contract or its snapshot, never read by Loquent itself, and will be removed in
+a future major release. Setting an old name changes nothing: set the new token.
+
+| 0.1 name | Now | Alias |
+|---|---|---|
+| `--lq-background` | `--lq-bg` | alias |
+| `--lq-muted` | `--lq-text-muted` | alias |
+| `--lq-radius` | `--lq-radius-lg` (the `theme.radius` value; `-sm`, `-md`, `-xl` scale from it) | alias |
+| `--lq-font` | `--lq-font-body` (`theme.font` also sets `--lq-font-display`) | alias |
+| `--lq-on-accent` | `--lq-accent-text` | alias |
+| `--lq-elevated` | `--lq-surface-raised` | alias |
+| `--lq-accent`, `--lq-surface`, `--lq-text`, `--lq-border`, `--lq-border-strong`, `--lq-accent-soft`, `--lq-danger`, `--lq-font-display`, `--lq-font-mono`, `--lq-radius-sm` | same name | (unchanged) |
+| `--lq-shadow` | `--lq-shadow-1` / `-2` / `-3` | none |
+| `--lq-hover` | none: use `color-mix(in srgb, var(--lq-text) 6%, transparent)` | none |
+| `--lq-danger-soft` | none: use `color-mix(in srgb, var(--lq-danger) 9%, transparent)` | none |
+
+**Other changes.**
+
+- **Markup.** Elements carry `data-lq-part` and `data-lq-state`; target those. The `lq-*`
+  class names are internal and changed throughout. `.lq-root[data-mode]` is gone: scope dark
+  rules with `[data-lq-scheme="dark"]` on `<html>`.
+- **Light/dark toggle.** Replaced by theme selection. The `lq-color-mode` localStorage key is
+  no longer read. `system` follows the device, or the brand background's scheme when
+  `theme.background` is set.
+- **Brand background.** It used to hide the toggle and force its scheme. Now it keeps the
+  brand palette in every theme (R25) with the derived roles described in
+  [the brand layer](#the-legacy-theme-keys-a-brand-layer).
+- **Precedence.** `theme` keys used to be inline styles on `<html>` that beat plain CSS.
+  They are now the `lq.brand` layer, so your unlayered CSS wins without `!important`;
+  only `lock_tokens` holds against it.
+- **`custom_css_path`.** Unset serves an empty stylesheet; set to a missing file is a 404
+  with a startup warning.
