@@ -5,7 +5,7 @@
  * adding something is a minor bump. contract.test.ts compares this against
  * __snapshots__/contract.json and fails until the version and the snapshot are updated.
  */
-import { COLOR_TOKENS } from "./themes";
+import { COLOR_TOKENS, THEMES } from "./themes";
 
 export const STYLE_CONTRACT_VERSION = "1.0.0";
 
@@ -63,6 +63,9 @@ export const SCALE_TOKENS = [
   "text-2xl",
   "leading-tight",
   "leading-normal",
+  "weight-normal",
+  "weight-medium",
+  "weight-semibold",
   "space-1",
   "space-2",
   "space-3",
@@ -96,12 +99,27 @@ export const STATES = [
   "data-lq-state=running",
   "data-lq-state=done",
   "data-lq-state=error",
+  "data-lq-state=stopped",
   "data-lq-role=user",
   "data-lq-role=assistant",
   "data-lq-active=true",
 ] as const;
 
-export type StateValue = "streaming" | "running" | "done" | "error";
+export type StateValue = "streaming" | "running" | "done" | "error" | "stopped";
+
+/** The theme ids `data-lq-theme` takes (and `default_theme` / `themes` in the config). */
+export const THEME_IDS = THEMES;
+
+/**
+ * Attributes on <html> that CSS may select on, with every value each can take. Set by the app
+ * (applyAppearance); they scope rules to a theme, scheme, density or text size.
+ */
+export const ROOT_ATTRIBUTES = {
+  "data-lq-theme": THEME_IDS,
+  "data-lq-scheme": ["light", "dark"],
+  "data-lq-density": ["comfortable", "compact"],
+  "data-lq-text": ["s", "m", "l"],
+} as const satisfies Record<string, readonly string[]>;
 export const ROLES = ["user", "assistant"] as const;
 export type RoleValue = (typeof ROLES)[number];
 
@@ -132,7 +150,7 @@ export const PART_TARGETS: Record<PartName, string> = {
   "message-actions": "The action bar under a finished assistant message. Absent while streaming or empty.",
   markdown: "The rendered markdown container of an assistant message.",
   "code-block": "A fenced code block, including its header bar.",
-  activity: "One step or tool row (same element as activity-step or activity-tool). data-lq-state=running|done|error (error: it was still running when its run ended, so it will not finish).",
+  activity: "One step or tool row (same element as activity-step or activity-tool). data-lq-state=running|done|stopped (stopped: it was still running when its run ended, so it will not finish).",
   "activity-step": "Kind token on the activity row for a step.",
   "activity-tool": "Kind token on the activity row for a tool call.",
   widget: "Every widget element, including the pending and fallback placeholders. Kind tokens widget-confirm|widget-select|widget-form sit on the same element once rendered.",

@@ -24,7 +24,7 @@ export function activityStatus(item: Step | Tool, runEnded: boolean): ActivitySt
   return runEnded ? "stopped" : "running";
 }
 
-const STATE = { running: "running", done: "done", stopped: "error" } as const;
+const STATE = { running: "running", done: "done", stopped: "stopped" } as const;
 
 function Row({
   label,

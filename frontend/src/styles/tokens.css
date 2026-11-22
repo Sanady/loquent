@@ -21,6 +21,9 @@
     --lq-text-2xl: 24px;
     --lq-leading-tight: 1.25;
     --lq-leading-normal: 1.6;
+    --lq-weight-normal: 400;
+    --lq-weight-medium: 500;
+    --lq-weight-semibold: 600;
 
     /* Space: 4px base */
     --lq-space-1: 4px;

@@ -33,7 +33,7 @@
     overflow: hidden;
     font-family: var(--lq-font-display);
     font-size: var(--lqi-title-size, var(--lq-text-base));
-    font-weight: 600;
+    font-weight: var(--lq-weight-semibold);
     letter-spacing: var(--lqi-title-tracking, -0.011em);
     line-height: var(--lq-leading-tight);
     text-overflow: ellipsis;

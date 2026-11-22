@@ -72,7 +72,7 @@ describe("MessageList", () => {
       renderList(readyStore({ view: view(items, run) }));
       for (const name of [/Planning/, /get_weather/]) {
         const row = activityOf(name);
-        expect(row.getAttribute("data-lq-state")).toBe("error");
+        expect(row.getAttribute("data-lq-state")).toBe("stopped");
         expect(row.textContent).toContain("stopped");
         expect(row.textContent).not.toContain("running");
       }
@@ -82,12 +82,12 @@ describe("MessageList", () => {
 
     it("is stopped when the run finished without closing it", () => {
       renderList(readyStore({ view: view([...orphaned(), botMsg("a1", "done anyway")], "idle") }));
-      expect(activityOf(/Planning/).getAttribute("data-lq-state")).toBe("error");
+      expect(activityOf(/Planning/).getAttribute("data-lq-state")).toBe("stopped");
     });
 
     it("from an earlier turn is stopped while a new run is live", () => {
       renderList(readyStore({ view: view([...orphaned(), userMsg("u2", "again"), botMsg("a2", "on it", true)], "running") }));
-      expect(activityOf(/get_weather/).getAttribute("data-lq-state")).toBe("error");
+      expect(activityOf(/get_weather/).getAttribute("data-lq-state")).toBe("stopped");
     });
   });
 

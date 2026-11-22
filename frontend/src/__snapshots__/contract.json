@@ -70,6 +70,9 @@
     "text-2xl",
     "leading-tight",
     "leading-normal",
+    "weight-normal",
+    "weight-medium",
+    "weight-semibold",
     "space-1",
     "space-2",
     "space-3",
@@ -99,8 +102,36 @@
     "data-lq-state=running",
     "data-lq-state=done",
     "data-lq-state=error",
+    "data-lq-state=stopped",
     "data-lq-role=user",
     "data-lq-role=assistant",
     "data-lq-active=true"
+  ],
+  "rootAttributes": {
+    "data-lq-theme": [
+      "graphite",
+      "graphite-dark",
+      "editorial",
+      "midnight"
+    ],
+    "data-lq-scheme": [
+      "light",
+      "dark"
+    ],
+    "data-lq-density": [
+      "comfortable",
+      "compact"
+    ],
+    "data-lq-text": [
+      "s",
+      "m",
+      "l"
+    ]
+  },
+  "themes": [
+    "graphite",
+    "graphite-dark",
+    "editorial",
+    "midnight"
   ]
 }

@@ -57,7 +57,7 @@
     background: var(--lqi-new-chat-bg, var(--lq-surface));
     color: var(--lqi-new-chat-text, var(--lq-text));
     font-size: var(--lq-text-sm);
-    font-weight: 500;
+    font-weight: var(--lq-weight-medium);
     box-shadow: var(--lq-shadow-1);
     transition:
       background-color var(--lq-duration-fast) var(--lq-ease),
@@ -94,7 +94,7 @@
     padding: var(--lq-space-4) var(--lq-space-3) var(--lq-space-1);
     color: var(--lq-text-muted);
     font-size: var(--lq-text-xs);
-    font-weight: 500;
+    font-weight: var(--lq-weight-medium);
     letter-spacing: 0.06em;
     line-height: var(--lq-leading-tight);
     text-transform: uppercase;
@@ -117,7 +117,7 @@
     border-color: var(--lq-border);
     background: var(--lq-surface-raised);
     box-shadow: var(--lq-shadow-1);
-    font-weight: 500;
+    font-weight: var(--lq-weight-medium);
   }
 
   .lq-thread-open {
@@ -190,6 +190,6 @@
   }
   .lq-thread-confirm-text {
     flex: 1 0 100%;
-    font-weight: 500;
+    font-weight: var(--lq-weight-medium);
   }
 }

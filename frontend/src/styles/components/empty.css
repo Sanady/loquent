@@ -24,7 +24,7 @@
     margin: 0 0 var(--lq-space-2);
     font-family: var(--lq-font-display);
     font-size: calc(var(--lq-text-2xl) * 1.5);
-    font-weight: var(--lqi-display-weight, 600);
+    font-weight: var(--lqi-display-weight, var(--lq-weight-semibold));
     letter-spacing: var(--lqi-display-tracking, -0.025em);
     line-height: var(--lq-leading-tight);
     text-wrap: balance;

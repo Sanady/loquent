@@ -89,7 +89,7 @@
     font-style: italic;
   }
   [data-lq-part~="markdown"] :is(.hljs-section, .hljs-strong) {
-    font-weight: 600;
+    font-weight: var(--lq-weight-semibold);
   }
   [data-lq-part~="markdown"] .hljs-emphasis {
     font-style: italic;

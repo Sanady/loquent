@@ -70,7 +70,7 @@
   .lq-chip-name {
     min-width: 0;
     overflow: hidden;
-    font-weight: 500;
+    font-weight: var(--lq-weight-medium);
     text-overflow: ellipsis;
     white-space: nowrap;
   }

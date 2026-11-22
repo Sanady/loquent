@@ -34,7 +34,7 @@
     color: var(--lq-text);
     font-family: var(--lqi-widget-title-font, var(--lq-font-body));
     font-size: var(--lqi-widget-title-size, var(--lq-text-base));
-    font-weight: var(--lqi-widget-title-weight, 600);
+    font-weight: var(--lqi-widget-title-weight, var(--lq-weight-semibold));
     line-height: var(--lq-leading-tight);
     text-wrap: pretty;
   }
@@ -132,13 +132,13 @@
     gap: var(--lq-space-1);
   }
   .lq-widget-field > label {
-    font-weight: 500;
+    font-weight: var(--lq-weight-medium);
   }
   .lq-widget-field.is-check label {
     display: flex;
     align-items: center;
     gap: var(--lq-space-2);
-    font-weight: 400;
+    font-weight: var(--lq-weight-normal);
   }
 
   .lq-widget-option input,
@@ -200,7 +200,7 @@
     background: color-mix(in srgb, var(--lqi-badge) 12%, transparent);
     color: var(--lq-text);
     font-size: var(--lq-text-xs);
-    font-weight: 600;
+    font-weight: var(--lq-weight-semibold);
     line-height: var(--lq-leading-tight);
   }
   .lq-widget-badge.is-no {

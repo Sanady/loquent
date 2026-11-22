@@ -88,7 +88,7 @@ function palette({ THEMES, THEME_LABEL, THEME_SCHEME, COLOR_TOKENS, THEME_TOKENS
   return out.join("\n");
 }
 
-function contract({ STYLE_CONTRACT_VERSION, PART_SELECTOR, PARTS, PART_TARGETS, SCALE_TOKENS, STATES }) {
+function contract({ STYLE_CONTRACT_VERSION, PART_SELECTOR, PARTS, PART_TARGETS, SCALE_TOKENS, STATES, ROOT_ATTRIBUTES, THEME_IDS }) {
   const out = [
     `Contract version: **${STYLE_CONTRACT_VERSION}**. Select a part with \`${PART_SELECTOR}\`.`,
     "",
@@ -105,6 +105,16 @@ function contract({ STYLE_CONTRACT_VERSION, PART_SELECTOR, PARTS, PART_TARGETS, 
     "#### States",
     "",
     STATES.map((s) => `\`${s}\``).join(", "),
+    "",
+    "#### Root attributes (on `<html>`)",
+    "",
+    "| Attribute | Values |",
+    "|---|---|",
+    ...Object.entries(ROOT_ATTRIBUTES).map(([a, values]) => `| \`${a}\` | ${values.map((v) => `\`${v}\``).join(", ")} |`),
+    "",
+    "#### Theme ids",
+    "",
+    THEME_IDS.map((t) => `\`${t}\``).join(", "),
     "",
   ];
   return out.join("\n");

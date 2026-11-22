@@ -145,7 +145,7 @@
     background: var(--lq-surface);
     color: var(--lq-text);
     font-size: var(--lq-text-sm);
-    font-weight: 500;
+    font-weight: var(--lq-weight-medium);
     line-height: var(--lq-leading-tight);
     box-shadow: var(--lq-shadow-1);
     transition:

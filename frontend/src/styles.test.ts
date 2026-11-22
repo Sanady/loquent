@@ -86,6 +86,9 @@ describe("component css", () => {
           expect(value, `${name}: ${prop} must use tokens`).not.toMatch(/\d(?:px|em|pt)\b/);
           expect(value, `${name}: ${prop} must use tokens`).toMatch(/var\(--lqi?-|^(?:inherit|0|50%)$/);
         }
+        if (prop === "font-weight") {
+          expect(value, `${name}: font-weight must use a weight token`).toMatch(/^(?:var\(--lqi?-[\w-]+\)|inherit)$/);
+        }
         if (/^(?:padding|margin|gap|row-gap|column-gap)(?:-[a-z]+)?$/.test(prop)) {
           expect(value, `${name}: ${prop} uses space tokens`).not.toMatch(/(?:^|[\s(,])[1-9]\d*(?:\.\d+)?px\b/);
         }

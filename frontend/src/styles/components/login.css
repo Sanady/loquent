@@ -38,7 +38,7 @@
     margin: 0;
     font-family: var(--lq-font-display);
     font-size: var(--lq-text-2xl);
-    font-weight: var(--lqi-display-weight, 600);
+    font-weight: var(--lqi-display-weight, var(--lq-weight-semibold));
     letter-spacing: var(--lqi-display-tracking, -0.025em);
     line-height: var(--lq-leading-tight);
   }
@@ -56,7 +56,7 @@
     display: grid;
     gap: var(--lq-space-2);
     font-size: var(--lq-text-sm);
-    font-weight: 500;
+    font-weight: var(--lq-weight-medium);
   }
   /* border-strong: a field's edge is a UI boundary and needs 3:1. */
   .lq-field input {
@@ -66,7 +66,7 @@
     border-radius: var(--lq-radius-md);
     background: var(--lq-bg);
     font-size: var(--lq-text-base);
-    font-weight: 400;
+    font-weight: var(--lq-weight-normal);
     transition: border-color var(--lq-duration-fast) var(--lq-ease);
   }
   .lq-field input:focus-visible {

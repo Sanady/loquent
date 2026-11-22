@@ -142,6 +142,7 @@ describe("token scale", () => {
       "font-body", "font-display", "font-mono",
       "text-xs", "text-sm", "text-base", "text-lg", "text-xl", "text-2xl",
       "leading-tight", "leading-normal",
+      "weight-normal", "weight-medium", "weight-semibold",
       ...Array.from({ length: 10 }, (_, i) => `space-${i + 1}`),
       "radius-sm", "radius-md", "radius-lg", "radius-xl", "radius-pill",
       "shadow-1", "shadow-2", "shadow-3",

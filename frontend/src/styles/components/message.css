@@ -132,7 +132,7 @@
     border-radius: var(--lq-radius-sm);
     font-family: var(--lq-font-body);
     font-size: var(--lq-text-xs);
-    font-weight: 500;
+    font-weight: var(--lq-weight-medium);
   }
 
   /* ---------- run notes ---------- */
@@ -158,7 +158,7 @@
     flex-wrap: nowrap;
     color: var(--lq-text-muted);
     font-size: var(--lq-text-xs);
-    font-weight: 500;
+    font-weight: var(--lq-weight-medium);
     letter-spacing: 0.04em;
     text-transform: uppercase;
   }

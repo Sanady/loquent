@@ -1,9 +1,9 @@
 @layer lq.components {
   /* Steps and tool calls: compact pill cards (radius-pill, a hairline border) led by a status
    * mark that differs in shape as well as hue: a hollow accent ring while running, a solid
-   * success dot when done, a solid danger dot when its run ended first (state error, read out
-   * as "stopped"). Opening one turns the pill into a full-width card, on the same fill, that
-   * shows the arguments and result in the mono face. */
+   * success dot when done, a solid danger dot when its run ended first (state stopped).
+   * Opening one turns the pill into a full-width card, on the same fill, that shows the
+   * arguments and result in the mono face. */
 
   /* Pill fill (--lqi-activity-bg) and the dot's halo (--lqi-dot-glow): themes tune both in
    * lq.themes; the defaults are the fallbacks at each use. */
@@ -22,7 +22,7 @@
   [data-lq-part~="activity"][data-lq-state="running"] {
     --lqi-dot: var(--lq-accent);
   }
-  [data-lq-part~="activity"][data-lq-state="error"] {
+  [data-lq-part~="activity"][data-lq-state="stopped"] {
     --lqi-dot: var(--lq-danger);
   }
 
@@ -123,7 +123,7 @@
   .lq-io-label {
     color: var(--lq-text-muted);
     font-size: var(--lq-text-xs);
-    font-weight: 600;
+    font-weight: var(--lq-weight-semibold);
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }

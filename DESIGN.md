@@ -165,6 +165,8 @@ hints, list markers and notes, uses `text-muted` or stronger. `accent-soft` and 
 - **Scale**: `text-xs` 12px, `text-sm` 13px, `text-base` 15px, `text-lg` 17px, `text-xl` 20px,
   `text-2xl` 24px, with `leading-tight` 1.25 and `leading-normal` 1.6. `data-lq-text="s|l"`
   on `<html>` rescales the whole ramp.
+- **Weights**: `--lq-weight-normal` 400, `--lq-weight-medium` 500 (labels, buttons, the
+  thread list) and `--lq-weight-semibold` 600 (headings, titles). Components use only these.
 
 ## 4. Component stylings
 
@@ -180,7 +182,7 @@ hints, list markers and notes, uses `text-muted` or stronger. `accent-soft` and 
 - **Messages.** The user's text sits in a `user-bubble` pill; the assistant's reply is unboxed
   prose in the conversation column. Finished assistant messages show an action bar.
 - **Activity and widgets.** Steps and tool calls are small pills with a status dot (running,
-  done, error). Widgets (confirm, select, form) are cards on `surface`; Midnight lets them fall
+  done, stopped). Widgets (confirm, select, form) are cards on `surface`; Midnight lets them fall
   from `surface-raised` into `surface`.
 - **Composer.** A single `surface` card holding pending files, the textarea and the attach and
   send buttons. It gains an accent focus halo while the textarea is focused.
@@ -217,7 +219,7 @@ token-list selector `[data-lq-part~="name"]`, never `=`:
   box-shadow: none;
 }
 /* States are attributes on the same element. */
-[data-lq-part~="activity"][data-lq-state="error"] {
+[data-lq-part~="activity"][data-lq-state="stopped"] {
   border-color: var(--lq-danger);
 }
 /* Re-colour with tokens, in one theme only. Unlayered CSS beats the brand layer too, so this
@@ -236,8 +238,13 @@ generated from it, including the **conditional parts** (those present only in so
 `login`, `drawer`). The states a part may carry are listed with it.
 
 - `data-lq-state` is one of `streaming` (assistant message while it arrives), `running`,
-  `done`, `error`. It appears on `message` (assistant), `activity`, `error`, `attachment` and
-  the `composer-send` button (`running` while a run is active).
+  `done`, `error`, `stopped`. It appears on `message` (assistant), `activity` (`running`,
+  `done`, or `stopped` when its run ended before it finished), `error`, `attachment` (`error`)
+  and the `composer-send` button (`running` while a run is active).
+- `data-lq-theme`, `data-lq-scheme`, `data-lq-density` and `data-lq-text` sit on `<html>` and
+  are part of the contract, with the values listed below: scope a rule to one theme with
+  `[data-lq-theme="midnight"]`, or to dark themes and dark brand palettes with
+  `[data-lq-scheme="dark"]`.
 - `data-lq-role` is `user` or `assistant`, on `message`.
 - `data-lq-active="true"` marks the current `thread-item`.
 
@@ -267,7 +274,7 @@ Contract version: **1.0.0**. Select a part with `[data-lq-part~="<name>"]`.
 | `message-actions` | The action bar under a finished assistant message. Absent while streaming or empty. |
 | `markdown` | The rendered markdown container of an assistant message. |
 | `code-block` | A fenced code block, including its header bar. |
-| `activity` | One step or tool row (same element as activity-step or activity-tool). data-lq-state=running\|done\|error (error: it was still running when its run ended, so it will not finish). |
+| `activity` | One step or tool row (same element as activity-step or activity-tool). data-lq-state=running\|done\|stopped (stopped: it was still running when its run ended, so it will not finish). |
 | `activity-step` | Kind token on the activity row for a step. |
 | `activity-tool` | Kind token on the activity row for a tool call. |
 | `widget` | Every widget element, including the pending and fallback placeholders. Kind tokens widget-confirm\|widget-select\|widget-form sit on the same element once rendered. |
@@ -286,11 +293,24 @@ Contract version: **1.0.0**. Select a part with `[data-lq-part~="<name>"]`.
 
 #### Scale tokens
 
-`--lq-font-body`, `--lq-font-display`, `--lq-font-mono`, `--lq-text-xs`, `--lq-text-sm`, `--lq-text-base`, `--lq-text-lg`, `--lq-text-xl`, `--lq-text-2xl`, `--lq-leading-tight`, `--lq-leading-normal`, `--lq-space-1`, `--lq-space-2`, `--lq-space-3`, `--lq-space-4`, `--lq-space-5`, `--lq-space-6`, `--lq-space-7`, `--lq-space-8`, `--lq-space-9`, `--lq-space-10`, `--lq-radius-sm`, `--lq-radius-md`, `--lq-radius-lg`, `--lq-radius-xl`, `--lq-radius-pill`, `--lq-shadow-1`, `--lq-shadow-2`, `--lq-shadow-3`, `--lq-duration-fast`, `--lq-duration-normal`, `--lq-ease`, `--lq-content-width`, `--lq-sidebar-width`
+`--lq-font-body`, `--lq-font-display`, `--lq-font-mono`, `--lq-text-xs`, `--lq-text-sm`, `--lq-text-base`, `--lq-text-lg`, `--lq-text-xl`, `--lq-text-2xl`, `--lq-leading-tight`, `--lq-leading-normal`, `--lq-weight-normal`, `--lq-weight-medium`, `--lq-weight-semibold`, `--lq-space-1`, `--lq-space-2`, `--lq-space-3`, `--lq-space-4`, `--lq-space-5`, `--lq-space-6`, `--lq-space-7`, `--lq-space-8`, `--lq-space-9`, `--lq-space-10`, `--lq-radius-sm`, `--lq-radius-md`, `--lq-radius-lg`, `--lq-radius-xl`, `--lq-radius-pill`, `--lq-shadow-1`, `--lq-shadow-2`, `--lq-shadow-3`, `--lq-duration-fast`, `--lq-duration-normal`, `--lq-ease`, `--lq-content-width`, `--lq-sidebar-width`
 
 #### States
 
-`data-lq-state=streaming`, `data-lq-state=running`, `data-lq-state=done`, `data-lq-state=error`, `data-lq-role=user`, `data-lq-role=assistant`, `data-lq-active=true`
+`data-lq-state=streaming`, `data-lq-state=running`, `data-lq-state=done`, `data-lq-state=error`, `data-lq-state=stopped`, `data-lq-role=user`, `data-lq-role=assistant`, `data-lq-active=true`
+
+#### Root attributes (on `<html>`)
+
+| Attribute | Values |
+|---|---|
+| `data-lq-theme` | `graphite`, `graphite-dark`, `editorial`, `midnight` |
+| `data-lq-scheme` | `light`, `dark` |
+| `data-lq-density` | `comfortable`, `compact` |
+| `data-lq-text` | `s`, `m`, `l` |
+
+#### Theme ids
+
+`graphite`, `graphite-dark`, `editorial`, `midnight`
 
 <!-- gen:contract:end -->
 
