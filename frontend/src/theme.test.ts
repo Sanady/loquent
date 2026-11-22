@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadThemeFonts } from "./fonts";
-import { applyAppearance, contrast, CUSTOM_ATTR, parseColor, resolveTheme, resolveThemeId, systemDark } from "./theme";
+import { applyAppearance, contrast, CUSTOM_ATTR, parseColor, resolveTheme, previewTheme, resolveThemeId, systemDark } from "./theme";
 import { THEME_TOKENS, THEMES, type ThemeId } from "./themes";
 
 vi.mock("./fonts", () => ({ loadThemeFonts: vi.fn(async () => {}) }));
@@ -374,5 +374,18 @@ describe("applyAppearance", () => {
     applyAppearance({ theme: "graphite" }, null);
     expect(el().getAttribute("data-lq-scheme")).toBe("light");
     localStorage.clear();
+  });
+});
+
+describe("previewTheme (?theme=)", () => {
+  const allowed = ["graphite", "midnight"] as const;
+  it("returns an allowed theme id", () => {
+    expect(previewTheme("?theme=midnight", allowed)).toBe("midnight");
+    expect(previewTheme("?x=1&theme=graphite", allowed)).toBe("graphite");
+  });
+  it("ignores a disallowed, unknown or missing id", () => {
+    expect(previewTheme("?theme=editorial", allowed)).toBeNull();
+    expect(previewTheme("?theme=nope", allowed)).toBeNull();
+    expect(previewTheme("", allowed)).toBeNull();
   });
 });

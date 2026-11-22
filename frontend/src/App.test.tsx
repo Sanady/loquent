@@ -175,6 +175,23 @@ describe("App", () => {
     }
   });
 
+  it("?theme= previews an allowed theme, ignores others, and is not persisted", async () => {
+    const html = document.documentElement;
+    window.history.replaceState(null, "", "/?theme=midnight");
+    try {
+      const { unmount } = await renderApp(defaultConfig({ default_theme: "graphite", themes: ["graphite", "midnight"] }));
+      expect(html.getAttribute("data-lq-theme")).toBe("midnight");
+      expect(localStorage.length).toBe(0);
+      unmount();
+      window.history.replaceState(null, "", "/?theme=editorial");
+      await renderApp(defaultConfig({ default_theme: "graphite", themes: ["graphite", "midnight"] }));
+      expect(html.getAttribute("data-lq-theme")).toBe("graphite");
+      expect(localStorage.length).toBe(0);
+    } finally {
+      window.history.replaceState(null, "", "/");
+    }
+  });
+
   it("the theme button is hidden when only one theme is allowed", async () => {
     await renderApp(defaultConfig({ default_theme: "editorial", themes: ["editorial"] }));
     expect(document.documentElement.getAttribute("data-lq-theme")).toBe("editorial");

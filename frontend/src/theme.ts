@@ -415,6 +415,15 @@ export function resolveThemeId(pref: ThemePref | undefined, cfg: ThemeConfig, sy
   return pick(pref) ?? pick(cfg.default_theme) ?? systemTheme(allowed, systemDark);
 }
 
+/**
+ * The `?theme=<id>` preview param (a preview and screenshot aid): the id when it is one of
+ * the `allowed` themes, otherwise null. It is never stored; reloading without it drops it.
+ */
+export function previewTheme(search: string, allowed: readonly ThemeId[]): ThemeId | null {
+  const id = new URLSearchParams(search).get("theme");
+  return isThemeId(id) && allowed.includes(id) ? id : null;
+}
+
 // ---------- system scheme ----------
 
 function darkQuery(): MediaQueryList | null {
