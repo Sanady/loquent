@@ -219,12 +219,11 @@ token-list selector `[data-lq-part~="name"]`, never `=`:
 [data-lq-part~="activity"][data-lq-state="error"] {
   border-color: var(--lq-danger);
 }
-/* Re-colour with tokens, in one theme only. If a brand key such as `theme.accent` sets the
-   same token, it is an inline style on <html> and beats this rule: add !important, or drop
-   the brand key. */
+/* Re-colour with tokens, in one theme only. Unlayered CSS beats the brand layer too, so this
+   wins over `theme.accent` without !important. Only a locked token (`lock_tokens`) holds. */
 [data-lq-theme="midnight"] {
-  --lq-accent: #a78bfa !important;
-  --lq-accent-text: #0b0618 !important;
+  --lq-accent: #a78bfa;
+  --lq-accent-text: #0b0618;
 }
 ```
 
@@ -296,24 +295,27 @@ Contract version: **1.0.0**. Select a part with `[data-lq-part~="<name>"]`.
 
 ### Cascade layers
 
-Loquent's own CSS lives in cascade layers, in this order (lowest to highest priority):
+Loquent's own CSS lives in cascade layers, declared in this order:
 
 ```css
-@layer lq.reset, lq.base, lq.components, lq.themes, lq.utilities;
+@layer lq.lock, lq.reset, lq.base, lq.components, lq.themes, lq.brand, lq.prefs, lq.utilities;
 ```
 
 **Developer CSS (`custom_css_path`) and user CSS are unlayered, so they beat every Loquent
 layer** regardless of selector specificity: a plain `[data-lq-part~="composer"] { ... }` is
-enough.
+enough, and so is `:root { --lq-accent: ... }`. The full precedence, strongest first:
 
-For colour and shape tokens there is one more tier, because the brand layer and user
-preferences are applied as inline styles on `<html>`. From strongest to weakest:
-
-1. `lock_tokens`: inline `!important`, so a locked token keeps its brand or theme value.
-2. The `theme` brand keys (and the user's accent pref): inline on `<html>`.
-3. Unlayered developer and user CSS. It beats the layers, but not an inline brand value for
-   the same token unless it uses `!important`.
-4. Loquent's `lq.*` layers, including the theme palettes.
+1. `lq.lock`: `lock_tokens`, written at runtime into `<style id="lq-lock">` as `!important`
+   rules on `:root` and every element below it. `!important` reverses layer order, so the
+   first layer's `!important` beats every later layer and all unlayered CSS, `!important` or
+   not. A locked token (and the tokens derived from it) keeps its brand or theme value.
+2. Unlayered developer and user CSS.
+3. `lq.utilities`.
+4. `lq.prefs`: the user's appearance prefs (reserved; the Appearance panel is coming).
+5. `lq.brand`: the `theme` brand keys, written at runtime into `<style id="lq-brand">` as
+   `:root` rules.
+6. `lq.themes`: the four theme palettes.
+7. `lq.components`, `lq.base` (scale tokens), `lq.reset`.
 
 ### Internal variables are not API
 
@@ -324,14 +326,29 @@ disappear in any release. Do not depend on them; use the `--lq-*` tokens and the
 ### The legacy `theme` keys: a brand layer
 
 The `theme` setting (`accent`, `background`, `surface`, `text`, `muted`, `radius`, `font`) is
-a **brand layer** on top of the active theme: it sets the matching `--lq-*` tokens as inline
-styles on `<html>`, so it beats the theme and, for the same token, plain unlayered CSS (see
-the precedence above). `lock_tokens` is the only thing above it. Text on accent fills is black or white,
-whichever contrasts more. When you set `background`, the palette is yours in every theme and
-the remaining surfaces are derived from it. Readable text is enforced for derived colours:
-`text` is stepped to at least **4.5:1** and `text-subtle` to at least **3:1** on the
-background and surfaces. A colour you set explicitly is kept, with a console warning if it
-falls below its floor.
+a **brand layer** on top of the active theme: it sets the matching `--lq-*` tokens in the
+`lq.brand` cascade layer, so it beats the theme but not your unlayered CSS or the user's
+(see the precedence above). `font` sets both `--lq-font-body` and `--lq-font-display`.
+Text on accent fills is black or white, whichever contrasts more, and `focus-ring` follows the
+accent, stepped to at least **3:1** on the background and surfaces when the accent is too
+faint.
+
+When you set `background`, the palette is yours in every theme and the remaining surfaces are
+derived from it. With the default `system` theme, Loquent then picks the theme that matches
+your background's scheme (Graphite for a light one, Midnight for a dark one). In any theme,
+the roles a theme would otherwise supply for its own scheme are derived for your surfaces:
+
+- `focus-ring` at least **3:1** on the background and surfaces;
+- without an `accent`, the theme's accent, stepped to **4.5:1** (it is also link text);
+- `success`, `warning` and `danger` from Graphite's values on a light background (Graphite
+  Dark's on a dark one), stepped to at least **4.5:1**;
+- code keeps the theme's syntax colours only while each holds 4.5:1 on the derived `code-bg`;
+  otherwise code blocks fall back to `text` and `text-muted`.
+
+Readable text is enforced for derived colours: `text` and `text-muted` are stepped to at least
+**4.5:1** on the background, `bg-subtle`, the surfaces and `code-bg`, and `text-subtle` to at
+least **3:1**. A colour you set explicitly is kept, with a console warning if it falls below
+its floor.
 
 ### Previewing a theme
 

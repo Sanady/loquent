@@ -6,7 +6,7 @@ import graphiteDarkCss from "./styles/themes/graphite-dark.css?raw";
 import graphiteCss from "./styles/themes/graphite.css?raw";
 import midnightCss from "./styles/themes/midnight.css?raw";
 import { contrast, parseColor } from "./theme";
-import { COLOR_TOKENS, THEME_SCHEME, THEME_TOKENS, THEMES, type ColorToken, type ThemeId } from "./themes";
+import { COLOR_TOKENS, SYNTAX_ROLES, THEME_SCHEME, THEME_SYNTAX, THEME_TOKENS, THEMES, type ColorToken, type ThemeId } from "./themes";
 
 const THEME_CSS: Record<ThemeId, string> = {
   graphite: graphiteCss,
@@ -105,13 +105,14 @@ describe("themes", () => {
     }
   });
 
-  it("syntax colors hold AA on code-bg in every theme", () => {
-    const roles = ["keyword", "string", "number", "title", "type", "meta", "comment"];
+  it("syntax colors match THEME_SYNTAX and hold AA on code-bg in every theme", () => {
     for (const id of THEMES) {
       const body = ruleBody(THEME_CSS[id], `[data-lq-theme="${id}"]`);
       const syntax = new Map([...body.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/--lqi-syntax-([a-z]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
-      expect([...syntax.keys()].sort(), id).toEqual([...roles].sort());
-      for (const [role, value] of syntax) {
+      expect([...syntax.keys()].sort(), id).toEqual([...SYNTAX_ROLES].sort());
+      for (const role of SYNTAX_ROLES) {
+        const value = THEME_SYNTAX[id][role];
+        expect(syntax.get(role)?.toLowerCase(), `${id} syntax-${role}`).toBe(value);
         expect(value, `${id} syntax-${role}`).toMatch(/^#[0-9a-f]{6}$/);
         const ratio = contrast(parseColor(value)!, solid(id, "code-bg"));
         expect(ratio, `${id}: syntax-${role} on code-bg = ${ratio.toFixed(2)}`).toBeGreaterThanOrEqual(4.5);
@@ -131,7 +132,7 @@ describe("themes", () => {
 
 describe("token scale", () => {
   it("layers.css declares the cascade layer order", () => {
-    expect(layersCss).toContain("@layer lq.reset, lq.base, lq.components, lq.themes, lq.utilities;");
+    expect(layersCss).toContain("@layer lq.lock, lq.reset, lq.base, lq.components, lq.themes, lq.brand, lq.prefs, lq.utilities;");
   });
 
   it("tokens.css defines every scale token in lq.base", () => {

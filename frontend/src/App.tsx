@@ -205,8 +205,9 @@ function Shell() {
   // `?theme=<id>` previews an allowed theme and wins over any pref (preview > pref > default).
   // It is never stored. Tasks 9/10: keep this precedence when prefs become persistent.
   const preview = previewTheme(window.location.search, themes);
-  const theme = effectiveThemeId(preview, pref, { default_theme: config?.default_theme, themes }, dark);
   const brand = config?.theme ?? null;
+  // A brand background fixes what "system" means (its scheme, not the OS's).
+  const theme = effectiveThemeId(preview, pref, { default_theme: config?.default_theme, themes, brand }, dark);
   const locks = config?.lock_tokens;
   useLayoutEffect(() => applyAppearance({ theme }, brand, document.documentElement, locks ?? []), [theme, brand, locks]);
   const cycleTheme = useCallback(() => setPref(themes[(themes.indexOf(theme) + 1) % themes.length]), [themes, theme]);
@@ -230,7 +231,8 @@ function Shell() {
   } else if (needsLogin) {
     body = <Login />;
   } else {
-    body = <Chat theme={theme} onCycleTheme={themes.length > 1 ? cycleTheme : null} />;
+    // The temporary cycle button would fight a ?theme= preview (which wins), so it hides then.
+    body = <Chat theme={theme} onCycleTheme={themes.length > 1 && !preview ? cycleTheme : null} />;
   }
 
   return (

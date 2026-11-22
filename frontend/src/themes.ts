@@ -150,3 +150,19 @@ export const THEME_TOKENS: Record<ThemeId, Record<ColorToken, string>> = {
     scrim: "#02040ab3",
   },
 };
+
+/** Syntax roles for code blocks; each is the private `--lqi-syntax-<role>` knob a theme sets. */
+export const SYNTAX_ROLES = ["keyword", "string", "number", "title", "type", "meta", "comment"] as const;
+export type SyntaxRole = (typeof SYNTAX_ROLES)[number];
+
+/**
+ * Each theme's syntax palette, 4.5:1 or better on its own code-bg. The theme CSS restates
+ * these (themes.test.ts keeps them in sync). Under a brand background, resolveTheme checks
+ * them against the brand's derived code-bg and falls back to monochrome code if one fails.
+ */
+export const THEME_SYNTAX: Record<ThemeId, Record<SyntaxRole, string>> = {
+  graphite: { keyword: "#6d28d9", string: "#166534", number: "#9a4a08", title: "#1d4ed8", type: "#0e7490", meta: "#9d174d", comment: "#6b6862" },
+  "graphite-dark": { keyword: "#a5b4fc", string: "#86efac", number: "#fdba74", title: "#d8b4fe", type: "#67e8f9", meta: "#f9a8d4", comment: "#8f8d87" },
+  editorial: { keyword: "#9a3412", string: "#3f6212", number: "#854d0e", title: "#1e40af", type: "#0f766e", meta: "#86198f", comment: "#6b6155" },
+  midnight: { keyword: "#22d3ee", string: "#6ee7b7", number: "#fcd34d", title: "#93c5fd", type: "#f0abfc", meta: "#fda4af", comment: "#7c87a6" },
+};

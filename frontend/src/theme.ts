@@ -1,18 +1,21 @@
 import { useEffect, useState } from "react";
 import { loadThemeFonts } from "./fonts";
-import { COLOR_TOKENS, THEME_SCHEME, THEME_TOKENS, THEMES, type ColorToken, type ThemeId } from "./themes";
+import { COLOR_TOKENS, THEME_SCHEME, THEME_SYNTAX, THEME_TOKENS, THEMES, type ColorToken, type ThemeId } from "./themes";
 
 /**
- * Legacy `config.theme` keys: the developer brand layer. It sits on top of the active theme
- * and below user prefs and user CSS. Mapping onto the theme tokens (`--lq-<token>`):
- *   accent      -> accent, plus derived accent-hover, accent-soft, accent-text (every theme)
+ * Legacy `config.theme` keys: the developer brand layer. It is written into the `lq.brand`
+ * cascade layer, above the active theme and below user prefs, unlayered developer CSS and
+ * user CSS. Mapping onto the theme tokens (`--lq-<token>`):
+ *   accent      -> accent, plus derived accent-hover, accent-soft, accent-text, focus-ring (every theme)
  *   background  -> bg          surface -> surface    text -> text    muted -> text-muted
  *   radius      -> radius-sm/md/lg/xl (lg is the configured value)
- *   font        -> font-body
- * With `background` set, the remaining surfaces (bg-subtle, surface-raised, border,
- * border-strong, user-bubble, user-bubble-text, code-bg, text-subtle) are derived from it and
- * the brand palette applies in every theme (R25). Without it, the color keys other than
- * accent apply to light themes only.
+ *   font        -> font-body and font-display
+ * With `background` set, the brand owns the palette in every theme (R25): the remaining
+ * surfaces (bg-subtle, surface-raised, border, border-strong, user-bubble, user-bubble-text,
+ * code-bg, text-subtle) are derived from it, and so are the roles a theme of the other scheme
+ * would get wrong: the accent family (from the theme accent when the brand sets none),
+ * focus-ring and success/warning/danger, each floored for contrast on the brand surfaces.
+ * Without `background`, the color keys other than accent apply to light themes only.
  */
 export const THEME_KEYS = ["accent", "background", "surface", "text", "muted", "radius", "font"] as const;
 
@@ -22,10 +25,28 @@ export const PALETTE_KEYS = ["background", "surface", "text", "muted"] as const;
 /** Attribute on <html> listing the palette keys that are brand-fixed (R25). */
 export const CUSTOM_ATTR = "data-lq-custom-colors";
 
+/**
+ * Internal attribute on <html>: "mono" when the theme's syntax palette misses 4.5:1 on a brand
+ * code-bg, so code blocks fall back to text and muted (components/code.css). Not part of the
+ * styling contract.
+ */
+export const SYNTAX_ATTR = "data-lqi-syntax";
+
 /** Locking a token also locks the tokens derived from it. */
 export const LOCK_DERIVED: Partial<Record<ColorToken, readonly ColorToken[]>> = {
-  accent: ["accent-hover", "accent-soft", "accent-text"],
+  accent: ["accent-hover", "accent-soft", "accent-text", "focus-ring"],
 };
+
+/**
+ * The cascade layer order (styles/layers.css states the same). Earliest is weakest for normal
+ * declarations and strongest for !important ones, which is why lq.lock comes first. lq.prefs is
+ * reserved for user prefs (Phase 2). Unlayered CSS beats every layer's normal declarations.
+ */
+export const LAYER_ORDER = "@layer lq.lock, lq.reset, lq.base, lq.components, lq.themes, lq.brand, lq.prefs, lq.utilities;";
+
+/** Ids of the managed <style> elements applyAppearance writes into <head>. */
+export const BRAND_SHEET_ID = "lq-brand";
+export const LOCK_SHEET_ID = "lq-lock";
 
 export type ColorMode = "light" | "dark";
 export type ThemePref = ThemeId | "system";
@@ -170,46 +191,75 @@ function warnBelowFloor(key: string, value: string, background: string, ratio: n
 // ---------- theme resolution (the legacy brand layer) ----------
 
 export interface ResolvedTheme {
-  /** Theme tokens (`--lq-<token>`) the brand sets for the requested scheme. */
+  /** Theme tokens (`--lq-<token>`) the brand sets for the requested theme. */
   vars: Record<string, string>;
   /** Palette keys that are brand-fixed in every theme. */
   custom: string[];
   /** The scheme a brand palette implies (from its background), or null when the theme's applies. */
   scheme: ColorMode | null;
+  /** True when the theme's syntax palette misses 4.5:1 on the brand code-bg (code goes monochrome). */
+  monoCode: boolean;
+  /** The opaque surfaces accent-derived roles are floored on (bg, surface, surface-raised). */
+  floorOn: Rgb[];
 }
 
 /** Radius scale from the one legacy `radius` value: lg is the configured radius. */
 const RADIUS_SCALE: Record<string, number> = { "--lq-radius-sm": 0.5, "--lq-radius-md": 0.67, "--lq-radius-lg": 1, "--lq-radius-xl": 1.33 };
 
-/** Text color for accent fills: near-black or white, whichever contrasts more. */
+/** Text color for accent fills: near-black or white, whichever contrasts more, stepped to 4.5:1. */
 function onAccent(rgb: Rgb): string {
-  return contrast(rgb, [17, 17, 17]) >= contrast(rgb, [255, 255, 255]) ? ON_LIGHT : ON_DARK;
+  const start = parseColor(contrast(rgb, [17, 17, 17]) >= contrast(rgb, [255, 255, 255]) ? ON_LIGHT : ON_DARK)!;
+  return toHex(withFloor(start, [rgb], 4.5));
 }
 
-/** The accent and the tokens derived from it. accent-text is omitted when the color can't be parsed. */
-function accentFamily(accent: string): Record<string, string> {
+/**
+ * The accent and the tokens derived from it. accent-text is omitted when the color can't be
+ * parsed. focus-ring follows the accent, stepped to 3:1 on `floorOn` (the bg and surfaces it
+ * is drawn against) when the accent itself falls short.
+ */
+function accentFamily(accent: string, floorOn: readonly Rgb[]): Record<string, string> {
   const vars: Record<string, string> = {
     "--lq-accent": accent,
     "--lq-accent-hover": `color-mix(in srgb, ${accent} 85%, var(--lq-text))`,
     "--lq-accent-soft": `color-mix(in srgb, ${accent} 14%, transparent)`,
+    "--lq-focus-ring": accent,
   };
   const rgb = resolveColor(accent);
-  if (rgb) vars["--lq-accent-text"] = onAccent(rgb);
+  if (rgb) {
+    vars["--lq-accent-text"] = onAccent(rgb);
+    if (floorOn.length) {
+      const ring = withFloor(rgb, floorOn, 3);
+      if (ring !== rgb) vars["--lq-focus-ring"] = toHex(ring);
+    }
+  }
   return vars;
 }
 
+/** The scheme a brand background implies, or null without a (parseable) background. */
+export function brandScheme(brand: Record<string, string> | null | undefined): ColorMode | null {
+  const v = brand?.background;
+  const bg = typeof v === "string" && v.trim() ? resolveColor(v.trim()) : null;
+  return bg ? (isDark(bg) ? "dark" : "light") : null;
+}
+
 /**
- * Turn `config.theme` into theme tokens for a theme of the given scheme.
+ * Turn `config.theme` into theme tokens for the given theme.
  *
  * - Every known key maps onto its token(s); unknown keys are ignored.
- * - accent-text (text on accent fills) is picked by contrast against the accent.
+ * - accent-text (text on accent fills) is picked by contrast against the accent, and
+ *   focus-ring follows the accent (floored to 3:1 on bg and surfaces).
  * - When `background` is set, the developer owns the palette (R25): missing surface/text/muted
  *   are derived from it so the result is readable, the other surfaces are derived from the
  *   configured colors, and all four palette keys are marked custom. The palette then applies
- *   in every theme. Without `background`, the palette keys are light-theme tweaks: for a dark
- *   theme they are left out and the theme's own colors apply.
+ *   in every theme, so the roles the theme would otherwise supply for its own scheme are
+ *   derived too (Q14): the accent family (from the theme's accent when the brand sets none),
+ *   focus-ring, and success/warning/danger from a scheme-matched reference palette. Without
+ *   `background`, the palette keys are light-theme tweaks: for a dark theme they are left out
+ *   and the theme's own colors apply.
  */
-export function resolveTheme(theme: Record<string, string> | null | undefined, themeScheme: ColorMode = "light"): ResolvedTheme {
+export function resolveTheme(theme: Record<string, string> | null | undefined, themeId: ThemeId = "graphite"): ResolvedTheme {
+  const id: ThemeId = isThemeId(themeId) ? themeId : "graphite";
+  const own = THEME_TOKENS[id];
   const vars: Record<string, string> = {};
   const val = (k: string) => {
     const v = theme?.[k];
@@ -218,15 +268,20 @@ export function resolveTheme(theme: Record<string, string> | null | undefined, t
   const radius = val("radius");
   if (radius) for (const [name, f] of Object.entries(RADIUS_SCALE)) vars[name] = f === 1 ? radius : `calc(${radius} * ${f})`;
   const font = val("font");
-  if (font) vars["--lq-font-body"] = font;
+  if (font) {
+    vars["--lq-font-body"] = font;
+    vars["--lq-font-display"] = font;
+  }
   const accent = val("accent");
-  if (accent) Object.assign(vars, accentFamily(accent));
 
   const background = val("background");
   if (!background) {
     const palette = { "--lq-surface": val("surface"), "--lq-text": val("text"), "--lq-text-muted": val("muted") };
-    if (themeScheme === "light") for (const [name, v] of Object.entries(palette)) if (v) vars[name] = v;
-    return { vars, custom: [], scheme: null };
+    if (THEME_SCHEME[id] === "light") for (const [name, v] of Object.entries(palette)) if (v) vars[name] = v;
+    const surface = (vars["--lq-surface"] && resolveOpaque(vars["--lq-surface"])) || parseColor(own.surface)!;
+    const floorOn = [parseColor(own.bg)!, surface, parseColor(own["surface-raised"])!];
+    if (accent) Object.assign(vars, accentFamily(accent, floorOn));
+    return { vars, custom: [], scheme: null, monoCode: false, floorOn };
   }
 
   const bg = resolveColor(background);
@@ -246,31 +301,41 @@ export function resolveTheme(theme: Record<string, string> | null | undefined, t
   const firstText = given.text ?? (floorBg ? toHex(withFloor(resolveColor(fallback.text)!, [floorBg], 4.5)) : fallback.text);
   const firstTextRgb = resolveColor(firstText);
 
-  // Surfaces are a tint of the text over the background. On a mid-tone, the best ink may
-  // miss 4.5:1 on a surface tinted toward it; that surface is tinted the other way instead.
+  // Surfaces are a tint of the text over the background. On a mid-tone, the best ink may miss
+  // 4.5:1 on a surface tinted toward it; that surface is tinted the other way instead.
+  const ink = floorBg ? bestInk([floorBg]) : null;
+  const tintSurface = (weight: number): Rgb | null => {
+    if (!bg || !firstTextRgb) return null;
+    const toward = mixRgb(firstTextRgb, bg, weight);
+    if (!ink || contrast(ink, toward) >= 4.5) return toward;
+    return mixRgb(ink === BLACK ? WHITE : BLACK, bg, weight);
+  };
+  const mixVar = (weight: number, a = "var(--lq-text)") => `color-mix(in srgb, ${a} ${Math.round(weight * 100)}%, var(--lq-bg))`;
+
   const surfaceVal = val("surface");
   const surfaceWeight = dark ? 0.07 : 0.045;
   let surface: Rgb | null;
   if (surfaceVal) {
     vars["--lq-surface"] = surfaceVal;
     surface = resolveColor(surfaceVal);
-  } else if (bg && firstTextRgb) {
-    surface = mixRgb(firstTextRgb, bg, surfaceWeight);
-    if (floorBg) {
-      const ink = bestInk([floorBg]);
-      if (contrast(ink, surface) < 4.5) surface = mixRgb(ink === BLACK ? WHITE : BLACK, bg, surfaceWeight);
-    }
-    vars["--lq-surface"] = toHex(surface);
   } else {
-    vars["--lq-surface"] = `color-mix(in srgb, var(--lq-text) ${Math.round(surfaceWeight * 100)}%, var(--lq-bg))`;
-    surface = null;
+    surface = tintSurface(surfaceWeight);
+    vars["--lq-surface"] = surface ? toHex(surface) : mixVar(surfaceWeight);
   }
   const raised = bg && surface ? mixRgb(surface, bg, 0.35) : null;
   vars["--lq-surface-raised"] = raised ? toHex(raised) : "color-mix(in srgb, var(--lq-surface) 35%, var(--lq-bg))";
 
-  // Text roles meet 4.5:1 on bg, surface and surface-raised. A derived value steps toward the
-  // max-contrast ink until all pass; a brand value is kept as set (with one warning).
-  const targets = floorBg ? [floorBg, surface, raised].filter((c): c is Rgb => c !== null) : [];
+  // The quiet fills text also sits on (sidebar, code), tinted the same way as surface.
+  const subtleWeight = dark ? 0.04 : 0.025;
+  const codeWeight = dark ? 0.05 : 0.035;
+  const bgSubtle = tintSurface(subtleWeight);
+  const codeBg = tintSurface(codeWeight);
+  vars["--lq-bg-subtle"] = bgSubtle ? toHex(bgSubtle) : mixVar(subtleWeight);
+  vars["--lq-code-bg"] = codeBg ? toHex(codeBg) : mixVar(codeWeight);
+
+  // Text roles meet 4.5:1 on bg, the surfaces and the quiet fills. A derived value steps toward
+  // the max-contrast ink until all pass; a brand value is kept as set (with one warning).
+  const targets = floorBg ? [floorBg, surface, raised, bgSubtle, codeBg].filter((c): c is Rgb => c !== null) : [];
   const textRole = (key: "text" | "muted", start: string): string => {
     const v = given[key];
     if (v) {
@@ -293,20 +358,17 @@ export function resolveTheme(theme: Record<string, string> | null | undefined, t
   vars["--lq-text-muted"] = muted;
 
   // A tint of the text color over the background: hex when both parse, color-mix otherwise.
-  const tint = (weight: number) =>
-    bg && textRgb ? mix(textRgb, bg, weight) : `color-mix(in srgb, var(--lq-text) ${Math.round(weight * 100)}%, var(--lq-bg))`;
-  vars["--lq-bg-subtle"] = tint(dark ? 0.04 : 0.025);
+  const tint = (weight: number) => (bg && textRgb ? mix(textRgb, bg, weight) : mixVar(weight));
   vars["--lq-border"] = tint(dark ? 0.16 : 0.11);
   vars["--lq-border-strong"] = tint(0.45);
   vars["--lq-user-bubble"] = tint(dark ? 0.1 : 0.06);
-  vars["--lq-code-bg"] = tint(dark ? 0.05 : 0.035);
 
   // user-bubble-text: the text color, stepped to 4.5:1 on the bubble when it falls short.
   const bubble = floorBg ? resolveColor(vars["--lq-user-bubble"]) : null;
   const bubbleText = textRgb && bubble ? withFloor(textRgb, [bubble], 4.5) : null;
   vars["--lq-user-bubble-text"] = bubbleText && bubbleText !== textRgb ? toHex(bubbleText) : text;
 
-  // text-subtle is for non-essential text only (timestamps, hints): held to 3:1 on bg and
+  // text-subtle is for non-text decoration only (chevrons, icons): held to 3:1 on bg and
   // surface, the same rule as the built-in themes, never to body-copy AA.
   const subtleTargets = floorBg ? (surface ? [floorBg, surface] : [floorBg]) : [];
   vars["--lq-text-subtle"] =
@@ -314,16 +376,30 @@ export function resolveTheme(theme: Record<string, string> | null | undefined, t
       ? toHex(subtleTargets.length ? withFloor(mixRgb(mutedRgb, bg, 0.8), subtleTargets, 3) : mixRgb(mutedRgb, bg, 0.8))
       : "color-mix(in srgb, var(--lq-text-muted) 80%, var(--lq-bg))";
 
-  return { vars, custom: [...PALETTE_KEYS], scheme: bg ? (dark ? "dark" : "light") : null };
+  // Roles the theme would supply for its own scheme (Q14): the accent family, focus-ring and
+  // status colors, made for these surfaces. A brand accent is kept as set; without one the
+  // theme accent is stepped to 4.5:1 (it is also link text). Status colors start from the
+  // scheme-matched reference theme and are stepped to 4.5:1 on bg and the surfaces.
+  const floorOn = floorBg ? [floorBg, surface, raised].filter((c): c is Rgb => c !== null) : [];
+  const ownAccent = parseColor(own.accent)!;
+  const accentValue = accent ?? (floorOn.length ? toHex(withFloor(ownAccent, floorOn, 4.5)) : own.accent);
+  Object.assign(vars, accentFamily(accentValue, floorOn));
+  const reference = THEME_TOKENS[dark ? "graphite-dark" : "graphite"];
+  for (const role of ["success", "warning", "danger"] as const) {
+    const start = parseColor(reference[role])!;
+    vars[`--lq-${role}`] = floorOn.length ? toHex(withFloor(start, floorOn, 4.5)) : reference[role];
+  }
+
+  // Code keeps the theme's syntax colors only while each holds 4.5:1 on the brand code-bg.
+  const monoCode = !codeBg || Object.values(THEME_SYNTAX[id]).some((c) => contrast(parseColor(c)!, codeBg) < 4.5);
+
+  return { vars, custom: [...PALETTE_KEYS], scheme: bg ? (dark ? "dark" : "light") : null, monoCode, floorOn };
 }
 
 // ---------- appearance ----------
 
 const isThemeId = (v: unknown): v is ThemeId => typeof v === "string" && (THEMES as readonly string[]).includes(v);
 const isColorToken = (v: unknown): v is ColorToken => typeof v === "string" && (COLOR_TOKENS as readonly string[]).includes(v);
-
-/** Every inline property applyAppearance owns; each call clears the ones it no longer sets. */
-const MANAGED = [...COLOR_TOKENS.map((t) => `--lq-${t}`), ...Object.keys(RADIUS_SCALE), "--lq-font-body"];
 
 export interface Appearance {
   theme: ThemeId;
@@ -333,13 +409,46 @@ export interface Appearance {
   accent?: string;
 }
 
+/** A value that could break out of its declaration is dropped (and reported once). */
+function safeValue(name: string, value: string): boolean {
+  if (!/[;{}<>\\]|\/\*/.test(value)) return true;
+  warnOnce(`unsafe|${name}|${value}`, `loquent theme: ignored ${name} value ${JSON.stringify(value)} (not a single CSS value).`);
+  return false;
+}
+
+/** Write (or remove, when `css` is empty) a managed <style id> at the end of <head>. */
+function writeSheet(doc: Document, id: string, css: string): void {
+  let style = doc.getElementById(id);
+  if (!css) {
+    style?.remove();
+    return;
+  }
+  if (!(style instanceof HTMLStyleElement)) {
+    style?.remove();
+    style = doc.createElement("style");
+    style.id = id;
+    (doc.head ?? doc.documentElement).appendChild(style);
+  }
+  if (style.textContent !== css) style.textContent = css;
+}
+
+const declarationsOf = (vars: Record<string, string>, important: boolean) =>
+  Object.entries(vars)
+    .filter(([name, v]) => safeValue(name, v))
+    .map(([name, v]) => `    ${name}: ${v}${important ? " !important" : ""};`)
+    .join("\n");
+
 /**
  * Apply the appearance to `el` (default <html>):
  * 1. root attributes data-lq-theme, data-lq-scheme, data-lq-density and data-lq-text;
- * 2. the legacy brand layer (`config.theme`), see resolveTheme;
- * 3. the user's accent pref;
- * 4. `lock_tokens` last, as !important inline properties: a locked token (and the tokens
- *    derived from it) keeps the brand value, or the theme's when the brand doesn't set it.
+ * 2. the legacy brand layer (`config.theme`, see resolveTheme) and the user's accent pref,
+ *    written as `:root` rules into the managed `<style id="lq-brand">` inside
+ *    `@layer lq.brand`: above the theme, below unlayered developer and user CSS;
+ * 3. `lock_tokens`, written into `<style id="lq-lock">` as `!important` rules for `:root` and
+ *    every descendant inside `@layer lq.lock`. Layered !important in the earliest layer beats
+ *    all later-layer and unlayered declarations, !important or not, and matching every element
+ *    stops a descendant rule from re-setting the token for its subtree. A locked token (and the
+ *    tokens derived from it) keeps the brand value, or the theme's when the brand doesn't set it.
  * It also starts loading the theme's fonts (memoised, so repeat calls are free).
  */
 export function applyAppearance(
@@ -349,7 +458,7 @@ export function applyAppearance(
   lock: readonly string[] = [],
 ): void {
   const theme = isThemeId(a.theme) ? a.theme : "graphite";
-  const resolved = resolveTheme(brand, THEME_SCHEME[theme]);
+  const resolved = resolveTheme(brand, theme);
 
   el.setAttribute("data-lq-theme", theme);
   el.setAttribute("data-lq-scheme", resolved.scheme ?? THEME_SCHEME[theme]);
@@ -357,23 +466,27 @@ export function applyAppearance(
   el.setAttribute("data-lq-text", a.text === "s" || a.text === "l" ? a.text : "m");
   if (resolved.custom.length) el.setAttribute(CUSTOM_ATTR, resolved.custom.join(" "));
   else el.removeAttribute(CUSTOM_ATTR);
+  if (resolved.monoCode) el.setAttribute(SYNTAX_ATTR, "mono");
+  else el.removeAttribute(SYNTAX_ATTR);
 
   const out: Record<string, string> = { ...resolved.vars };
   const userAccent = a.accent?.trim();
-  if (userAccent && resolveColor(userAccent)) Object.assign(out, accentFamily(userAccent));
+  if (userAccent && resolveColor(userAccent)) Object.assign(out, accentFamily(userAccent, resolved.floorOn));
 
-  const locked = new Set<string>();
+  const locked: Record<string, string> = {};
   for (const token of lock) {
     if (!isColorToken(token)) continue;
     for (const t of [token, ...(LOCK_DERIVED[token] ?? [])]) {
       const name = `--lq-${t}`;
-      locked.add(name);
-      out[name] = resolved.vars[name] ?? THEME_TOKENS[theme][t];
+      locked[name] = resolved.vars[name] ?? THEME_TOKENS[theme][t];
     }
   }
 
-  for (const name of MANAGED) el.style.removeProperty(name);
-  for (const [name, v] of Object.entries(out)) el.style.setProperty(name, v, locked.has(name) ? "important" : "");
+  const doc = el.ownerDocument;
+  const brandCss = declarationsOf(out, false);
+  const lockCss = declarationsOf(locked, true);
+  writeSheet(doc, BRAND_SHEET_ID, brandCss && `${LAYER_ORDER}\n@layer lq.brand {\n  :root {\n${brandCss}\n  }\n}\n`);
+  writeSheet(doc, LOCK_SHEET_ID, lockCss && `${LAYER_ORDER}\n@layer lq.lock {\n  :root,\n  :root * {\n${lockCss}\n  }\n}\n`);
 
   loadThemeFonts(theme).catch(() => {
     /* a font that fails to load falls back to the theme's system stack */
@@ -385,6 +498,8 @@ export function applyAppearance(
 export interface ThemeConfig {
   default_theme?: ThemePref | string;
   themes?: readonly (ThemeId | string)[];
+  /** The legacy brand layer (`config.theme`): a brand background fixes what `system` means. */
+  brand?: Record<string, string> | null;
 }
 
 /** The allowed themes, in configured order; all four when the list is missing or holds no known id. */
@@ -406,9 +521,13 @@ function systemTheme(allowed: readonly ThemeId[], dark: boolean): ThemeId {
 
 /**
  * The effective theme. A pref outside the allowed themes falls back to `default_theme`
- * silently; `system` (as pref or default) follows the OS scheme within the allowed themes.
+ * silently; `system` (as pref or default) follows the OS scheme within the allowed themes,
+ * or, when the brand sets a background, the brand's scheme (light -> graphite, dark ->
+ * midnight by default), as release 1 did.
  */
-export function resolveThemeId(pref: ThemePref | undefined, cfg: ThemeConfig, systemDark: boolean): ThemeId {
+export function resolveThemeId(pref: ThemePref | undefined, cfg: ThemeConfig, osDark: boolean): ThemeId {
+  const fixed = brandScheme(cfg.brand);
+  const systemDark = fixed ? fixed === "dark" : osDark;
   const allowed = allowedThemes(cfg.themes);
   const pick = (v: unknown) => (isThemeId(v) && allowed.includes(v) ? v : null);
   if (pref === "system") return systemTheme(allowed, systemDark);

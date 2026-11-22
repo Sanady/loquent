@@ -6,10 +6,10 @@
 
   /* Fallback palette: text and muted only, which hold 4.5:1 on code-bg by construction. It is
    * the default before a theme applies (the var() fallbacks below), and it replaces the theme's
-   * palette when a brand background owns the colors (R25): a theme's syntax colors were only
-   * checked against the theme's own code-bg. Set on .lq-root so it beats the theme's values on
-   * <html>. */
-  [data-lq-custom-colors~="background"] .lq-root {
+   * palette when a brand background owns the colors (R25) and one of the theme's syntax colors
+   * misses 4.5:1 on the brand's code-bg: theme.ts checks and sets data-lqi-syntax="mono" on
+   * <html>. Set on .lq-root so it beats the theme's values on <html>. */
+  [data-lqi-syntax="mono"] .lq-root {
     --lqi-syntax-keyword: var(--lq-text);
     --lqi-syntax-string: var(--lq-text);
     --lqi-syntax-number: var(--lq-text);

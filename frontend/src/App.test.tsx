@@ -198,6 +198,28 @@ describe("App", () => {
     }
   });
 
+  it("the theme button is hidden while a ?theme= preview is active", async () => {
+    window.history.replaceState(null, "", "/?theme=midnight");
+    try {
+      await renderApp(defaultConfig({ default_theme: "graphite", themes: ["graphite", "midnight"] }));
+      expect(document.documentElement.getAttribute("data-lq-theme")).toBe("midnight");
+      expect(screen.queryByRole("button", { name: /^theme:/i })).toBeNull();
+    } finally {
+      window.history.replaceState(null, "", "/");
+    }
+  });
+
+  it("system follows a brand background's scheme, not the OS (Q14a)", async () => {
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("dark"), addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList);
+    try {
+      await renderApp(defaultConfig({ theme: { background: "#ffffff" } }));
+      expect(document.documentElement.getAttribute("data-lq-theme")).toBe("graphite");
+      expect(document.documentElement.getAttribute("data-lq-scheme")).toBe("light");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("the theme button is hidden when only one theme is allowed", async () => {
     await renderApp(defaultConfig({ default_theme: "editorial", themes: ["editorial"] }));
     expect(document.documentElement.getAttribute("data-lq-theme")).toBe("editorial");
@@ -213,7 +235,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: /^theme:/i }));
     expect(document.documentElement.getAttribute("data-lq-theme")).toBe("graphite-dark");
     expect(html.getAttribute("data-lq-scheme")).toBe("dark");
-    expect(document.documentElement.style.getPropertyValue("--lq-bg")).toBe("#111111");
+    expect(getComputedStyle(document.documentElement).getPropertyValue("--lq-bg").trim()).toBe("#111111");
   });
 
   it("thread titles are shown without markdown syntax", async () => {

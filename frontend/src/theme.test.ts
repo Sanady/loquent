@@ -1,21 +1,38 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadThemeFonts } from "./fonts";
-import { applyAppearance, contrast, CUSTOM_ATTR, parseColor, resolveTheme, effectiveThemeId, previewTheme, resolveThemeId, systemDark } from "./theme";
-import { THEME_TOKENS, THEMES, type ThemeId } from "./themes";
+import layersCss from "./styles/layers.css?raw";
+import {
+  applyAppearance,
+  contrast,
+  CUSTOM_ATTR,
+  LAYER_ORDER,
+  LOCK_DERIVED,
+  parseColor,
+  resolveTheme,
+  effectiveThemeId,
+  previewTheme,
+  resolveThemeId,
+  SYNTAX_ATTR,
+  systemDark,
+} from "./theme";
+import { THEME_SYNTAX, THEME_TOKENS, THEMES, type ThemeId } from "./themes";
 
 vi.mock("./fonts", () => ({ loadThemeFonts: vi.fn(async () => {}) }));
 
 afterEach(() => vi.restoreAllMocks());
 
-/** Each theme's color tokens as a plain rule (the real theme CSS is layered; jsdom may not cascade @layer). */
+/** Each theme's color tokens as a rule in lq.themes, as the real theme CSS has them (jsdom cascades @layer). */
 const THEME_RULES = Object.fromEntries(
   THEMES.map((id) => [
     id,
-    `[data-lq-theme="${id}"] { ${Object.entries(THEME_TOKENS[id])
+    `${LAYER_ORDER} @layer lq.themes { [data-lq-theme="${id}"] { ${Object.entries(THEME_TOKENS[id])
       .map(([k, v]) => `--lq-${k}: ${v};`)
-      .join(" ")} }`,
+      .join(" ")} } }`,
   ]),
 ) as Record<ThemeId, string>;
+
+/** The value <html> computes for a custom property (brand and lock sheets are real CSS now). */
+const css = (name: string, el: Element = document.documentElement) => getComputedStyle(el).getPropertyValue(name).trim();
 
 /** applyAppearance with the legacy `config.theme` only (the brand layer), in a light theme. */
 const applyBrand = (brand: Record<string, string>, el?: HTMLElement, theme: ThemeId = "graphite") => applyAppearance({ theme }, brand, el);
@@ -35,21 +52,23 @@ describe("theme", () => {
       },
       el,
     );
-    expect(el.style.getPropertyValue("--lq-accent")).toBe("#ff0066");
-    expect(el.style.getPropertyValue("--lq-bg")).toBe("#101010");
-    expect(el.style.getPropertyValue("--lq-surface")).toBe("#202020");
-    expect(el.style.getPropertyValue("--lq-text")).toBe("#eeeeee");
-    expect(el.style.getPropertyValue("--lq-text-muted")).toBe("#999999");
-    expect(el.style.getPropertyValue("--lq-radius-lg")).toBe("4px");
-    expect(el.style.getPropertyValue("--lq-font-body")).toBe("Georgia, serif");
+    expect(css("--lq-accent")).toBe("#ff0066");
+    expect(css("--lq-bg")).toBe("#101010");
+    expect(css("--lq-surface")).toBe("#202020");
+    expect(css("--lq-text")).toBe("#eeeeee");
+    expect(css("--lq-text-muted")).toBe("#999999");
+    expect(css("--lq-radius-lg")).toBe("4px");
+    expect(css("--lq-font-body")).toBe("Georgia, serif");
+    // The brand font is the display face too.
+    expect(css("--lq-font-display")).toBe("Georgia, serif");
   });
 
   it("ignores unknown keys and clears keys that are no longer set", () => {
     const el = document.documentElement;
     applyBrand({ accent: "red", evil: "x" }, el);
-    expect(el.style.getPropertyValue("--lq-evil")).toBe("");
+    expect(css("--lq-evil")).toBe("");
     applyBrand({}, el);
-    expect(el.style.getPropertyValue("--lq-accent")).toBe("");
+    expect(css("--lq-accent")).toBe("");
   });
 
   it("system mode follows prefers-color-scheme", () => {
@@ -170,11 +189,11 @@ describe("brand palettes (R25) and derived contrast", () => {
     const el = document.documentElement;
     applyBrand({ background: "#111", accent: "#7dd3fc" }, el);
     expect(el.getAttribute(CUSTOM_ATTR)).toBe("background surface text muted");
-    expect(el.style.getPropertyValue("--lq-surface-raised")).not.toBe("");
+    expect(css("--lq-surface-raised")).not.toBe("");
     applyBrand({}, el);
     expect(el.hasAttribute(CUSTOM_ATTR)).toBe(false);
-    expect(el.style.getPropertyValue("--lq-surface-raised")).toBe("");
-    expect(el.style.getPropertyValue("--lq-accent-text")).toBe("");
+    expect(css("--lq-surface-raised")).toBe("");
+    expect(css("--lq-accent-text")).toBe("");
   });
 });
 
@@ -282,7 +301,15 @@ describe("theme selection", () => {
 
 describe("applyAppearance", () => {
   const el = () => document.documentElement;
-  const v = (name: string) => el().style.getPropertyValue(name);
+  const v = (name: string) => css(name);
+  // Derived values such as accent-hover read var(--lq-text); a theme normally supplies it.
+  let base: HTMLStyleElement;
+  beforeEach(() => {
+    base = document.createElement("style");
+    base.textContent = `${LAYER_ORDER} @layer lq.themes { :root { --lq-text: #18181b; } }`;
+    document.head.appendChild(base);
+  });
+  afterEach(() => base.remove());
 
   it("sets the root attributes and loads the theme's fonts", () => {
     vi.mocked(loadThemeFonts).mockClear();
@@ -316,7 +343,8 @@ describe("applyAppearance", () => {
     expect(v("--lq-surface")).toBe("#fafafa");
     expect(el().getAttribute("data-lq-scheme")).toBe("light");
     applyAppearance({ theme: "midnight" }, { text: "#222222", surface: "#fafafa", radius: "4px" });
-    expect(v("--lq-text")).toBe("");
+    const brandSheet = document.getElementById("lq-brand")?.textContent ?? "";
+    expect(brandSheet).not.toContain("--lq-text:");
     expect(v("--lq-surface")).toBe("");
     expect(v("--lq-radius-lg")).toBe("4px"); // non-color keys apply everywhere
     expect(el().getAttribute("data-lq-scheme")).toBe("dark");
@@ -354,19 +382,21 @@ describe("applyAppearance", () => {
     expect(v("--lq-accent-text")).toBe("#ffffff");
     expect(v("--lq-accent-hover")).toContain("#1e3a8a");
     expect(v("--lq-accent-soft")).toContain("#1e3a8a");
-    expect(el().style.getPropertyPriority("--lq-accent")).toBe("important");
-    expect(el().style.getPropertyPriority("--lq-accent-hover")).toBe("important");
+    expect(v("--lq-focus-ring")).toBe(resolveTheme({ accent: "#1e3a8a" }).vars["--lq-focus-ring"]);
+    // Locks are a layered sheet, never inline style.
+    expect(el().style.getPropertyValue("--lq-accent")).toBe("");
+    expect(document.getElementById("lq-lock")?.textContent).toMatch(/@layer lq\.lock\s*\{\s*:root,\s*:root \*\s*\{[^}]*--lq-accent: #1e3a8a !important;/);
 
     // Without a brand accent the theme's own accent family is locked.
     applyAppearance({ theme: "midnight", accent: "#facc15" }, null, undefined, ["accent"]);
-    for (const t of ["accent", "accent-hover", "accent-soft", "accent-text"] as const) {
+    for (const t of ["accent", "accent-hover", "accent-soft", "accent-text", "focus-ring"] as const) {
       expect(v(`--lq-${t}`)).toBe(THEME_TOKENS.midnight[t]);
     }
 
-    // Unlocking clears the inline values.
+    // Unlocking clears the lock sheet.
     applyAppearance({ theme: "midnight" }, null);
     expect(v("--lq-accent")).toBe("");
-    expect(el().style.getPropertyPriority("--lq-accent")).toBe("");
+    expect(document.getElementById("lq-lock")?.textContent ?? "").not.toContain("--lq-accent");
   });
 
   it("does not use the old lq-color-mode key", () => {
@@ -396,5 +426,225 @@ describe("effectiveThemeId precedence", () => {
     expect(effectiveThemeId("editorial", "midnight", cfg, false)).toBe("editorial");
     expect(effectiveThemeId(null, "midnight", cfg, false)).toBe("midnight");
     expect(effectiveThemeId(null, undefined, cfg, true)).toBe("graphite");
+  });
+});
+
+// ---------- brand layer on a theme of either scheme (Q14), focus ring (I1), cascade (Q15) ----------
+
+const rgbOf = (c: string) => {
+  const v = parseColor(c);
+  if (!v) throw new Error(`unparseable ${c}`);
+  return v;
+};
+
+describe("brand background on any theme (Q14)", () => {
+  const BGS = ["#ffffff", "#0f172a"];
+
+  it("focus-ring >= 3:1 and success/warning/danger >= 4.5:1 on bg and surface, in all 4 themes", () => {
+    for (const theme of THEMES) {
+      for (const background of BGS) {
+        const brands: Record<string, string>[] = [{ background }, { background, accent: "#e11d48" }, { background, accent: "#facc15" }];
+        for (const brand of brands) {
+          const v = resolveTheme(brand, theme).vars;
+          const where = `${theme} + ${JSON.stringify(brand)}`;
+          for (const surface of ["--lq-bg", "--lq-surface", "--lq-surface-raised"]) {
+            const on = rgbOf(v[surface]);
+            expect(contrast(rgbOf(v["--lq-focus-ring"]), on), `focus-ring on ${surface}: ${where}`).toBeGreaterThanOrEqual(3);
+            for (const status of ["--lq-success", "--lq-warning", "--lq-danger"]) {
+              expect(contrast(rgbOf(v[status]), on), `${status} on ${surface}: ${where}`).toBeGreaterThanOrEqual(4.5);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it("without a brand accent the theme accent is floored on the brand surfaces", () => {
+    for (const theme of THEMES) {
+      for (const background of BGS) {
+        const v = resolveTheme({ background }, theme).vars;
+        const where = `${theme} on ${background}`;
+        for (const surface of ["--lq-bg", "--lq-surface"]) {
+          expect(contrast(rgbOf(v["--lq-accent"]), rgbOf(v[surface])), `accent on ${surface}: ${where}`).toBeGreaterThanOrEqual(3);
+        }
+        expect(contrast(rgbOf(v["--lq-accent-text"]), rgbOf(v["--lq-accent"])), `accent-text: ${where}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it("status colors come from the scheme-matched reference palette", () => {
+    expect(resolveTheme({ background: "#ffffff" }, "midnight").vars["--lq-success"]).toBe(THEME_TOKENS.graphite.success);
+    expect(resolveTheme({ background: "#0f172a" }, "graphite").vars["--lq-danger"]).toBe(THEME_TOKENS["graphite-dark"].danger);
+  });
+
+  it("the theme's own focus and status colors never show through on the page", () => {
+    for (const theme of THEMES) {
+      for (const background of BGS) {
+        const style = document.createElement("style");
+        style.textContent = THEME_RULES[theme];
+        document.head.appendChild(style);
+        try {
+          applyAppearance({ theme }, { background });
+          for (const surface of ["--lq-bg", "--lq-surface"]) {
+            const on = rgbOf(css(surface));
+            expect(contrast(rgbOf(css("--lq-focus-ring")), on), `${theme}/${background} focus-ring`).toBeGreaterThanOrEqual(3);
+            for (const status of ["--lq-success", "--lq-warning", "--lq-danger"]) {
+              expect(contrast(rgbOf(css(status)), on), `${theme}/${background} ${status}`).toBeGreaterThanOrEqual(4.5);
+            }
+          }
+        } finally {
+          style.remove();
+        }
+      }
+    }
+  });
+
+  it("system resolves to the theme matching the brand background's scheme", () => {
+    const all = { default_theme: "system" as const, themes: [...THEMES] };
+    expect(resolveThemeId("system", { ...all, brand: { background: "#ffffff" } }, true)).toBe("graphite");
+    expect(resolveThemeId(undefined, { ...all, brand: { background: "#ffffff" } }, true)).toBe("graphite");
+    expect(resolveThemeId("system", { ...all, brand: { background: "#0f172a" } }, false)).toBe("midnight");
+    // An explicit theme is kept; the brand floors (above) keep it readable.
+    expect(resolveThemeId("midnight", { ...all, brand: { background: "#ffffff" } }, false)).toBe("midnight");
+    // Without a background the OS scheme decides, as before.
+    expect(resolveThemeId("system", { ...all, brand: { accent: "#e11d48" } }, true)).toBe("midnight");
+    expect(effectiveThemeId(null, "system", { ...all, brand: { background: "#0f172a" } }, false)).toBe("midnight");
+  });
+});
+
+describe("focus ring follows the accent (I1)", () => {
+  it("a brand accent sets focus-ring, floored to 3:1 on the theme's bg and surface", () => {
+    expect(resolveTheme({ accent: "#1e3a8a" }, "graphite").vars["--lq-focus-ring"]).toBe("#1e3a8a");
+    for (const theme of THEMES) {
+      const v = resolveTheme({ accent: "#facc15" }, theme).vars;
+      for (const surface of ["bg", "surface", "surface-raised"] as const) {
+        const ratio = contrast(rgbOf(v["--lq-focus-ring"]), rgbOf(THEME_TOKENS[theme][surface]));
+        expect(ratio, `${theme} focus-ring on ${surface}`).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
+
+  it("a user accent moves the focus ring too", () => {
+    applyAppearance({ theme: "graphite", accent: "#0f766e" }, null);
+    expect(css("--lq-focus-ring")).toBe("#0f766e");
+    applyAppearance({ theme: "graphite" }, null);
+  });
+
+  it("locking accent locks focus-ring", () => {
+    expect(LOCK_DERIVED.accent).toContain("focus-ring");
+  });
+});
+
+describe("cascade layers: brand below dev CSS, locks above everything (Q15)", () => {
+  function mount(rules: string) {
+    const style = document.createElement("style");
+    style.textContent = rules;
+    document.head.appendChild(style);
+    const root = document.createElement("div");
+    root.className = "lq-root";
+    const child = document.createElement("span");
+    root.appendChild(child);
+    document.body.appendChild(root);
+    return { root, child, done: () => (style.remove(), root.remove()) };
+  }
+
+  it("layers.css declares the order the managed sheets use", () => {
+    expect(LAYER_ORDER).toBe("@layer lq.lock, lq.reset, lq.base, lq.components, lq.themes, lq.brand, lq.prefs, lq.utilities;");
+    expect(layersCss).toContain(LAYER_ORDER);
+  });
+
+  it("the brand is a layered sheet, not inline style", () => {
+    applyAppearance({ theme: "graphite" }, { accent: "#e11d48" });
+    const el = document.documentElement;
+    expect(el.getAttribute("style") ?? "").not.toContain("--lq-");
+    expect(document.getElementById("lq-brand")?.textContent).toMatch(/@layer lq\.brand\s*\{\s*:root\s*\{[^}]*--lq-accent: #e11d48;/);
+    expect(css("--lq-accent")).toBe("#e11d48");
+    applyAppearance({ theme: "graphite" }, null);
+  });
+
+  it("unlayered developer CSS on :root beats an unlocked brand accent", () => {
+    const { root, done } = mount(":root { --lq-accent: #123456; }");
+    try {
+      applyAppearance({ theme: "graphite" }, { accent: "#e11d48" });
+      expect(css("--lq-accent", root)).toBe("#123456");
+    } finally {
+      done();
+      applyAppearance({ theme: "graphite" }, null);
+    }
+  });
+
+  it("brand beats the theme", () => {
+    const { root, done } = mount(THEME_RULES.graphite);
+    try {
+      applyAppearance({ theme: "graphite" }, { accent: "#e11d48" });
+      expect(css("--lq-accent", root)).toBe("#e11d48");
+    } finally {
+      done();
+      applyAppearance({ theme: "graphite" }, null);
+    }
+  });
+
+  it("unlayered user CSS on a descendant cannot override a locked accent, even with !important", () => {
+    const { root, child, done } = mount(
+      `${THEME_RULES.graphite} .lq-root { --lq-accent: red; --lq-focus-ring: red; } .lq-root span { --lq-accent: blue !important; }`,
+    );
+    try {
+      applyAppearance({ theme: "graphite" }, { accent: "#1e3a8a" }, undefined, ["accent"]);
+      expect(css("--lq-accent", root)).toBe("#1e3a8a");
+      expect(css("--lq-accent", child)).toBe("#1e3a8a");
+      expect(css("--lq-focus-ring", root)).toBe("#1e3a8a");
+      // Unlocked, the same user CSS wins.
+      applyAppearance({ theme: "graphite" }, { accent: "#1e3a8a" });
+      expect(css("--lq-accent", root)).toBe("red");
+      expect(css("--lq-accent", child)).toBe("blue");
+    } finally {
+      done();
+      applyAppearance({ theme: "graphite" }, null);
+    }
+  });
+});
+
+describe("code under a brand background (M3)", () => {
+  it("keeps the theme's syntax palette when it holds 4.5:1 on the brand code-bg", () => {
+    const r = resolveTheme({ background: "#ffffff" }, "graphite");
+    expect(r.monoCode).toBe(false);
+    for (const value of Object.values(THEME_SYNTAX.graphite)) {
+      expect(contrast(rgbOf(value), rgbOf(r.vars["--lq-code-bg"]))).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("falls back to monochrome when one syntax color fails on the brand code-bg", () => {
+    expect(resolveTheme({ background: "#ffffff" }, "midnight").monoCode).toBe(true);
+    expect(resolveTheme({ background: "#0f172a" }, "graphite").monoCode).toBe(true);
+    expect(resolveTheme({}, "midnight").monoCode).toBe(false);
+  });
+
+  it("applyAppearance marks monochrome code on <html>", () => {
+    const el = document.documentElement;
+    applyAppearance({ theme: "midnight" }, { background: "#ffffff" });
+    expect(el.getAttribute(SYNTAX_ATTR)).toBe("mono");
+    applyAppearance({ theme: "graphite" }, { background: "#ffffff" });
+    expect(el.hasAttribute(SYNTAX_ATTR)).toBe(false);
+    applyAppearance({ theme: "graphite" }, null);
+  });
+});
+
+describe("derived text holds AA on every derived surface (M8)", () => {
+  it("0-255 grey sweep: text and muted >= 4.5 on bg, bg-subtle, surface, surface-raised, code-bg; bubble text on bubble", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const hex2 = (n: number) => n.toString(16).padStart(2, "0");
+    for (let g = 0; g <= 255; g++) {
+      const background = `#${hex2(g).repeat(3)}`;
+      const v = resolveTheme({ background }).vars;
+      for (const fg of ["--lq-text", "--lq-text-muted"]) {
+        for (const on of ["--lq-bg", "--lq-bg-subtle", "--lq-surface", "--lq-surface-raised", "--lq-code-bg"]) {
+          const ratio = contrast(rgbOf(v[fg]), rgbOf(v[on]));
+          expect(ratio, `${fg} on ${on} of ${background} = ${ratio.toFixed(2)}`).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+      const bubble = contrast(rgbOf(v["--lq-user-bubble-text"]), rgbOf(v["--lq-user-bubble"]));
+      expect(bubble, `user-bubble-text on ${background}`).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(warn).not.toHaveBeenCalled();
   });
 });
