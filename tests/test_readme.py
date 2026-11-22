@@ -11,7 +11,8 @@ from loquent.cli import main
 from loquent.settings import Settings
 
 README = (Path(__file__).resolve().parent.parent / "README.md").read_text(encoding="utf-8")
-FLAG = re.compile(r"(?<![\w-])--(?!lqi?-)[a-z][a-z-]*")  # `--lq-*` and `--lqi-*` are CSS variables, not flags
+# `--lq-*` and `--lqi-*` are CSS variables, not flags.
+FLAG = re.compile(r"(?<![\w-])--(?!lqi?-)[a-z][a-z-]*")
 # Flags of other tools' command lines that the README shows. Each belongs to the named tool.
 FOREIGN_FLAGS = {
     "--enable-auto-tool-choice",  # vllm serve
