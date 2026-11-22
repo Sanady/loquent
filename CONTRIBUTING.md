@@ -64,9 +64,9 @@ Dependabot opens these bumps in their own PR. The `release-config` CI job fails 
 
 1. Merging the release PR creates the tag and the GitHub Release.
 2. Approve the `pypi` deployment.
-3. Right after the first 0.1.0 release, merge `chore: drop release-as` (remove
-   `"release-as": "0.1.0"` from `release-please-config.json`) **before any `feat` or `fix` PR**,
-   or release-please re-proposes 0.1.0.
+3. Never set `"release-as"` in `release-please-config.json` again. It pinned the one-time 0.1.0
+   bootstrap release and was removed after it shipped. While it is set, release-please proposes that
+   exact version on every release, even when that version already exists.
 4. Keep immutable releases off: `attach-assets` uploads after publish.
 
 ## Ignoring formatting-only commits in `git blame`
