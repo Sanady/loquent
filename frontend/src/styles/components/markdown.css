@@ -1,0 +1,165 @@
+@layer lq.components {
+  /* Assistant markdown. Body copy inherits text-base / leading-normal from the message; the
+   * vertical rhythm is built from the space scale so density rescales it. Headings use the
+   * display face (the serif in Editorial). Links stay in the text color with an accent
+   * underline, so the single accent is not spent on every link. */
+
+  [data-lq-part~="markdown"] {
+    overflow-wrap: anywhere;
+  }
+  [data-lq-part~="markdown"] > :first-child {
+    margin-top: 0;
+  }
+  [data-lq-part~="markdown"] > :last-child {
+    margin-bottom: 0;
+  }
+
+  [data-lq-part~="markdown"] :is(p, ul, ol, blockquote, dl) {
+    margin: 0 0 var(--lq-space-4);
+  }
+
+  [data-lq-part~="markdown"] :is(h1, h2, h3, h4, h5, h6) {
+    margin: var(--lq-space-7) 0 var(--lq-space-2);
+    font-family: var(--lq-font-display);
+    font-weight: var(--lqi-display-weight, var(--lq-weight-semibold));
+    letter-spacing: -0.01em;
+    line-height: var(--lq-leading-tight);
+    text-wrap: balance;
+  }
+  [data-lq-part~="markdown"] h1 {
+    font-size: var(--lq-text-xl);
+  }
+  [data-lq-part~="markdown"] h2 {
+    font-size: var(--lq-text-lg);
+  }
+  [data-lq-part~="markdown"] :is(h3, h4, h5, h6) {
+    margin-top: var(--lq-space-6);
+    font-size: var(--lq-text-base);
+  }
+  [data-lq-part~="markdown"] :is(h1, h2, h3, h4, h5, h6) + * {
+    margin-top: 0;
+  }
+
+  [data-lq-part~="markdown"] strong {
+    font-weight: var(--lq-weight-semibold);
+  }
+
+  [data-lq-part~="markdown"] :is(ul, ol) {
+    padding-left: var(--lq-space-6);
+  }
+  [data-lq-part~="markdown"] li + li,
+  [data-lq-part~="markdown"] li > :is(ul, ol) {
+    margin-top: var(--lq-space-1);
+  }
+  [data-lq-part~="markdown"] li > :is(ul, ol) {
+    margin-bottom: 0;
+  }
+  [data-lq-part~="markdown"] li > p {
+    margin-bottom: var(--lq-space-2);
+  }
+  [data-lq-part~="markdown"] li::marker {
+    color: var(--lq-text-muted);
+  }
+  [data-lq-part~="markdown"] .contains-task-list {
+    padding-left: var(--lq-space-1);
+    list-style: none;
+  }
+  [data-lq-part~="markdown"] input[type="checkbox"] {
+    margin: 0 var(--lq-space-2) 0 0;
+    vertical-align: -0.1em;
+    accent-color: var(--lq-accent);
+  }
+
+  [data-lq-part~="markdown"] a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--lq-accent) 55%, transparent);
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 0.2em;
+    transition: text-decoration-color var(--lq-duration-fast) var(--lq-ease);
+  }
+  [data-lq-part~="markdown"] a:hover {
+    text-decoration-color: var(--lq-accent);
+  }
+  /* A link whose URL was refused (unsafe scheme) keeps its text but reads as dead. */
+  [data-lq-part~="markdown"] a:not([href]) {
+    text-decoration-line: line-through;
+    text-decoration-color: var(--lq-text-subtle);
+  }
+
+  [data-lq-part~="markdown"] blockquote {
+    padding: 0 0 0 var(--lq-space-4);
+    border-left: 2px solid var(--lq-border-strong);
+    color: var(--lq-text-muted);
+  }
+
+  [data-lq-part~="markdown"] hr {
+    margin: var(--lq-space-7) 0;
+    border: 0;
+    border-top: 1px solid var(--lq-border);
+  }
+
+  [data-lq-part~="markdown"] img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--lq-radius-md);
+  }
+  .lq-img-blocked {
+    color: var(--lq-text-muted);
+    font-style: italic;
+  }
+
+  /* Inline code: a code-bg lozenge in the mono face. Inside a heading it takes the heading size. */
+  [data-lq-part~="markdown"] :not(pre) > code {
+    padding: 0.1em 0.35em;
+    border-radius: var(--lq-radius-sm);
+    background: var(--lq-code-bg);
+    /* A hairline drawn inside the box, so the lozenge keeps the text's metrics. */
+    outline: 1px solid color-mix(in srgb, var(--lq-border) 70%, transparent);
+    outline-offset: -1px;
+    font-family: var(--lq-font-mono);
+    font-size: var(--lq-text-sm);
+    font-variant-ligatures: none;
+  }
+  [data-lq-part~="markdown"] :is(h1, h2, h3, h4, h5, h6) code {
+    font-size: inherit;
+  }
+
+  /* ---------- tables ---------- */
+
+  .lq-table-wrap {
+    margin: 0 0 var(--lq-space-4);
+    overflow-x: auto;
+    border: 1px solid var(--lq-border);
+    border-radius: var(--lq-radius-md);
+  }
+  [data-lq-part~="markdown"] table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--lq-text-sm);
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+  [data-lq-part~="markdown"] :is(th, td) {
+    padding: var(--lq-space-2) var(--lq-space-3);
+    border-bottom: 1px solid var(--lq-border);
+    text-align: left;
+    vertical-align: top;
+  }
+  [data-lq-part~="markdown"] th {
+    background: var(--lq-bg-subtle);
+    font-weight: var(--lq-weight-semibold);
+  }
+  [data-lq-part~="markdown"] tr:last-child td {
+    border-bottom: 0;
+  }
+
+  /* ---------- math ---------- */
+
+  /* KaTeX's own CSS (unlayered) sets the math font and size; only the overflow is ours. */
+  [data-lq-part~="markdown"] .katex-display {
+    padding: var(--lq-space-1) 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+}

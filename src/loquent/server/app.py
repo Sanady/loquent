@@ -92,6 +92,7 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncIterator[None]:
+        static.warn_missing_branding(settings)
         await store.init()
         if deps.password_mode:
             await run_in_threadpool(routes_auth._dummy_hash)  # warm, so logins time evenly

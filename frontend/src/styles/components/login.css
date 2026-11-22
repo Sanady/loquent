@@ -1,0 +1,99 @@
+@layer lq.components {
+  /* Sign in, plus the boot and "can't reach the server" screens that share its frame. */
+
+  [data-lq-part~="login"],
+  .lq-fatal,
+  .lq-boot {
+    display: grid;
+    place-items: center;
+    height: 100%;
+    padding: var(--lq-space-6) var(--lq-space-4);
+    overflow-y: auto;
+    background: var(--lq-bg);
+  }
+
+  .lq-login-card {
+    display: grid;
+    gap: var(--lq-space-4);
+    width: 100%;
+    max-width: 380px;
+    padding: var(--lq-space-7) var(--lq-space-7) var(--lq-space-6);
+    border: 1px solid var(--lq-border);
+    border-radius: var(--lq-radius-xl);
+    background: var(--lq-surface);
+    box-shadow: var(--lq-shadow-3);
+    animation: lq-enter var(--lq-duration-normal) var(--lq-ease) both;
+  }
+
+  .lq-login-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--lq-space-2);
+    min-height: 24px;
+    color: var(--lq-text-muted);
+  }
+
+  .lq-login-card h1,
+  .lq-fatal h1 {
+    margin: 0;
+    font-family: var(--lq-font-display);
+    font-size: var(--lq-text-2xl);
+    font-weight: var(--lqi-display-weight, var(--lq-weight-semibold));
+    letter-spacing: var(--lqi-display-tracking, -0.025em);
+    line-height: var(--lq-leading-tight);
+  }
+
+  .lq-login-error {
+    margin: 0;
+    padding: var(--lq-space-2) var(--lq-space-3);
+    border: 1px solid color-mix(in srgb, var(--lq-danger) 30%, transparent);
+    border-radius: var(--lq-radius-md);
+    background: color-mix(in srgb, var(--lq-danger) 8%, var(--lq-surface));
+    font-size: var(--lq-text-sm);
+  }
+
+  .lq-field {
+    display: grid;
+    gap: var(--lq-space-2);
+    font-size: var(--lq-text-sm);
+    font-weight: var(--lq-weight-medium);
+  }
+  /* border-strong: a field's edge is a UI boundary and needs 3:1. */
+  .lq-field input {
+    height: 40px;
+    padding: 0 var(--lq-space-3);
+    border: 1px solid var(--lq-border-strong);
+    border-radius: var(--lq-radius-md);
+    background: var(--lq-bg);
+    font-size: var(--lq-text-base);
+    font-weight: var(--lq-weight-normal);
+    transition: border-color var(--lq-duration-fast) var(--lq-ease);
+  }
+  .lq-field input:focus-visible {
+    /* One 2px ring: the outline sits over the border. */
+    border-color: var(--lq-focus-ring);
+    outline-offset: -1px;
+  }
+
+  .lq-login-card .lq-btn-primary {
+    height: 40px;
+    margin-top: var(--lq-space-2);
+    font-size: var(--lq-text-base);
+  }
+
+  .lq-fatal {
+    align-content: center;
+    gap: var(--lq-space-2);
+    text-align: center;
+  }
+  .lq-fatal p {
+    margin: 0 0 var(--lq-space-3);
+    color: var(--lq-text-muted);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lq-login-card {
+      animation: none;
+    }
+  }
+}

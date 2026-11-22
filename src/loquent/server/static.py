@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import logging
 import re
 from importlib.resources import files
 from pathlib import Path
@@ -21,6 +22,16 @@ STATIC_DIR: Path = Path(str(files("loquent.server") / "static"))
 _HEAD_RE = re.compile(r"<head(\s[^>]*)?>", re.IGNORECASE)
 
 MISSING_UI = "UI assets missing: build with `npm run build` in frontend/"
+
+log = logging.getLogger("loquent.server")
+
+
+def warn_missing_branding(settings: Settings) -> None:
+    """At startup: a configured branding file that does not exist is served as a 404."""
+    for name in ("custom_css_path", "logo_path"):
+        p = getattr(settings, name)
+        if p is not None and not Path(p).is_file():
+            log.warning("%s is set but %s is not a file; it will be served as a 404", name, p)
 
 
 def _normalize(root_path: str) -> str:
@@ -81,7 +92,13 @@ def routes(settings: Settings) -> list[Route]:
 
     async def custom_css(request: Request) -> Response:
         p = settings.custom_css_path
-        if p is None or not Path(p).is_file():
+        if p is None:
+            # The page always links this stylesheet: when none is configured, an empty one
+            # keeps the console clean.
+            return Response("", media_type="text/css")
+        if not Path(p).is_file():
+            # Configured but missing is a deployment error: keep it visible as a 404 (startup
+            # also logs a warning, see warn_missing_branding).
             raise HTTPException(404)
         return FileResponse(p, media_type="text/css")
 

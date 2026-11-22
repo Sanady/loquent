@@ -1,0 +1,10 @@
+/* Cascade layer order. Import this file first so every later @layer block lands in place.
+ * For normal declarations later layers win:
+ *   reset < base (scale tokens) < components < themes (color, font, shape tokens)
+ *   < brand (config.theme, written at runtime into <style id="lq-brand">)
+ *   < prefs (user prefs, reserved) < utilities.
+ * Unlayered rules (third-party CSS such as KaTeX, developer custom.css and user CSS) beat
+ * every layer's normal declarations. lq.lock comes first because !important reverses the
+ * order: its !important rules (lock_tokens, written into <style id="lq-lock">) beat every
+ * later layer and all unlayered CSS, !important or not. theme.ts LAYER_ORDER states the same. */
+@layer lq.lock, lq.reset, lq.base, lq.components, lq.themes, lq.brand, lq.prefs, lq.utilities;

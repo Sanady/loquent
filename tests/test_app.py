@@ -54,7 +54,12 @@ async def test_index_injects_base_href(tmp_path, monkeypatch):
         r = await c.get("/api/nope")
         assert r.status_code == 404 and r.json() == {"error": "not_found"}
         assert (await c.get("/branding/logo")).status_code == 404
-        assert (await c.get("/branding/custom.css")).status_code == 404
+        r = await c.get("/branding/custom.css")  # unset: an empty stylesheet, not a 404
+        assert (
+            r.status_code == 200
+            and r.text == ""
+            and r.headers["content-type"].startswith("text/css")
+        )
         assert (await c.get("/assets/%2e%2e/index.html")).status_code == 404
         assert (await c.get("/assets/a%00.js")).status_code == 404
 
@@ -82,6 +87,43 @@ async def test_branding_files(tmp_path, monkeypatch):
         r = await c.get("/branding/custom.css")
         assert r.text == "body{}" and "css" in r.headers["content-type"]
         assert (await c.get("/api/config")).json()["logo_url"] == "branding/logo"
+
+
+async def test_custom_css_unset_is_an_empty_stylesheet_with_security_headers(tmp_path, monkeypatch):
+    fake_ui(tmp_path, monkeypatch)
+    app = App(echo, settings=settings(tmp_path))
+    async with app.lifespan(), client_for(app) as c:
+        r = await c.get("/branding/custom.css")
+        assert r.status_code == 200 and r.text == ""
+        assert r.headers["content-type"].startswith("text/css")
+        assert "content-security-policy" in r.headers
+        assert r.headers["x-content-type-options"] == "nosniff"
+
+
+async def test_custom_css_set_serves_the_file(tmp_path, monkeypatch):
+    fake_ui(tmp_path, monkeypatch)
+    (tmp_path / "c.css").write_text(":root{--lq-accent:#123456}")
+    app = App(echo, settings=settings(tmp_path, custom_css_path=tmp_path / "c.css"))
+    async with app.lifespan(), client_for(app) as c:
+        r = await c.get("/branding/custom.css")
+        assert r.status_code == 200 and r.text == ":root{--lq-accent:#123456}"
+        assert r.headers["content-type"].startswith("text/css")
+
+
+async def test_custom_css_set_but_missing_is_404_and_warns_at_startup(
+    tmp_path, monkeypatch, caplog
+):
+    fake_ui(tmp_path, monkeypatch)
+    missing = tmp_path / "nope.css"
+    app = App(echo, settings=settings(tmp_path, custom_css_path=missing))
+    with caplog.at_level("WARNING", logger="loquent.server"):
+        async with app.lifespan(), client_for(app) as c:
+            assert any(
+                str(missing) in r.getMessage() and "custom_css_path" in r.getMessage()
+                for r in caplog.records
+            )
+            r = await c.get("/branding/custom.css")
+            assert r.status_code == 404
 
 
 async def test_app_mounts_inside_fastapi_or_starlette_under_prefix(tmp_path, monkeypatch):

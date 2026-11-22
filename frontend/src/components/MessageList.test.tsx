@@ -4,7 +4,7 @@ import { StoreProvider } from "../storeContext";
 import type { Item } from "../state/reducer";
 import type { AppStore } from "../state/store";
 import { botMsg, readyStore, userMsg, view } from "../test/helpers";
-import { MessageList } from "./MessageList";
+import { EmptyState, MessageList } from "./MessageList";
 
 function renderList(store: AppStore, fileUrl?: (id: string) => Promise<{ url: string }>) {
   return render(
@@ -28,8 +28,10 @@ describe("MessageList", () => {
     const tool = screen.getByRole("button", { name: /get_weather/ });
     expect(step.getAttribute("aria-expanded")).toBe("false");
     expect(tool.getAttribute("aria-expanded")).toBe("false");
-    // A running step shows a spinner.
-    expect(step.querySelector(".lq-spinner")).not.toBeNull();
+    // A running step shows a running status dot; a finished tool a done one.
+    expect(step.closest('[data-lq-part~="activity"]')!.getAttribute("data-lq-state")).toBe("running");
+    expect(step.querySelector(".lq-activity-dot")).not.toBeNull();
+    expect(tool.closest('[data-lq-part~="activity"]')!.getAttribute("data-lq-state")).toBe("done");
     expect(container.textContent).not.toContain('"city"');
 
     fireEvent.click(tool);
@@ -46,6 +48,47 @@ describe("MessageList", () => {
     expect(step.getAttribute("aria-expanded")).toBe("true");
     fireEvent.click(step);
     expect(step.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  describe("a step or tool left running", () => {
+    const activityOf = (name: RegExp) => screen.getByRole("button", { name }).closest('[data-lq-part~="activity"]')!;
+    const orphaned = (): Item[] => [
+      userMsg("u1", "weather?"),
+      { kind: "step", name: "Planning", status: "running" },
+      { kind: "tool", id: "c1", name: "get_weather", args: '{"city":"Oslo"}', status: "running" },
+    ];
+
+    it("stays running while its run is live", () => {
+      renderList(readyStore({ view: view(orphaned(), "running") }));
+      for (const name of [/Planning/, /get_weather/]) {
+        expect(activityOf(name).getAttribute("data-lq-state")).toBe("running");
+        expect(activityOf(name).textContent).toContain("running");
+      }
+    });
+
+    it.each(["failed", "interrupted", "cancelled"] as const)("is stopped once the run ended (%s)", (run) => {
+      const items = orphaned();
+      if (run === "failed") items.push({ kind: "error", message: "The model is unavailable.", code: "agent_error" });
+      renderList(readyStore({ view: view(items, run) }));
+      for (const name of [/Planning/, /get_weather/]) {
+        const row = activityOf(name);
+        expect(row.getAttribute("data-lq-state")).toBe("stopped");
+        expect(row.textContent).toContain("stopped");
+        expect(row.textContent).not.toContain("running");
+      }
+      fireEvent.click(screen.getByRole("button", { name: /get_weather/ }));
+      expect(screen.getByText("No result: the run ended first.")).toBeTruthy();
+    });
+
+    it("is stopped when the run finished without closing it", () => {
+      renderList(readyStore({ view: view([...orphaned(), botMsg("a1", "done anyway")], "idle") }));
+      expect(activityOf(/Planning/).getAttribute("data-lq-state")).toBe("stopped");
+    });
+
+    it("from an earlier turn is stopped while a new run is live", () => {
+      renderList(readyStore({ view: view([...orphaned(), userMsg("u2", "again"), botMsg("a2", "on it", true)], "running") }));
+      expect(activityOf(/get_weather/).getAttribute("data-lq-state")).toBe("stopped");
+    });
   });
 
   it("user text is shown as plain text, assistant text as markdown", () => {
@@ -168,5 +211,28 @@ describe("MessageList", () => {
     const store = readyStore({ view: view([]) });
     renderList(store);
     expect(screen.getByRole("heading", { level: 1 })).toBeTruthy();
+  });
+
+  it("the empty state greets and shows no suggestions unless given some", () => {
+    const store = readyStore({ view: view([]) });
+    const { container } = renderList(store);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("How can I help?");
+    expect(container.querySelector(".lq-empty-sub")?.textContent).toBeTruthy();
+    expect(screen.queryByRole("list", { name: "Suggestions" })).toBeNull();
+  });
+
+  it("suggestion chips send their text", () => {
+    const store = readyStore({ view: view([]) });
+    const send = vi.spyOn(store.getState(), "send").mockResolvedValue(true);
+    store.setState({ send });
+    render(
+      <StoreProvider store={store}>
+        <EmptyState suggestions={["Summarise my week", "Draft a reply"]} />
+      </StoreProvider>,
+    );
+    const chips = screen.getByRole("list", { name: "Suggestions" });
+    expect(chips.querySelectorAll("button")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Draft a reply" }));
+    expect(send).toHaveBeenCalledWith("Draft a reply", []);
   });
 });

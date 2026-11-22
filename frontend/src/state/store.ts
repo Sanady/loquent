@@ -43,6 +43,13 @@ export interface AppState {
   notice: string | null;
   /** True while a run is being started (upload or POST in flight, before the first event). */
   starting: boolean;
+  /**
+   * True while send/answer/regenerate would be refused by the single-run guard: a run is
+   * starting, or its stream is still open (the server sends RUN_FINISHED, then saves the run,
+   * then closes the stream), or a thread is loading. Anything that starts a run must be
+   * disabled while this is true or the view's run is "running", or the click is silently lost.
+   */
+  busy: boolean;
 
   init(): Promise<void>;
   login(username: string, password: string): Promise<void>;
@@ -269,9 +276,12 @@ export function createAppStore(
       const token = ++runToken;
       busyToken = token; // hold the guard while the thread loads
       const unhold = () => {
-        if (busyToken === token) busyToken = null;
+        if (busyToken === token) {
+          busyToken = null;
+          set({ busy: false });
+        }
       };
-      set({ currentThreadId: id, view: emptyView(), starting: false });
+      set({ currentThreadId: id, view: emptyView(), starting: false, busy: true });
       let detail: ThreadDetail;
       try {
         detail = await api.thread(id);
@@ -312,11 +322,11 @@ export function createAppStore(
       busyToken = token;
       const ac = new AbortController();
       abort = ac;
-      set({ starting: true });
+      set({ starting: true, busy: true });
       const release = () => {
         if (busyToken === token) {
           busyToken = null;
-          set({ starting: false });
+          set({ starting: false, busy: false });
         }
       };
       try {
@@ -368,6 +378,7 @@ export function createAppStore(
       view: emptyView(),
       notice: null,
       starting: false,
+      busy: false,
 
       async init() {
         try {
@@ -402,7 +413,7 @@ export function createAppStore(
         gen++;
         busyToken = null;
         abort?.abort();
-        set({ user: null, threads: [], currentThreadId: null, view: emptyView(), starting: false });
+        set({ user: null, threads: [], currentThreadId: null, view: emptyView(), starting: false, busy: false });
       },
 
       async refreshThreads() {
@@ -457,7 +468,7 @@ export function createAppStore(
         gen++;
         busyToken = null;
         abort?.abort();
-        set({ currentThreadId: null, view: emptyView(), starting: false });
+        set({ currentThreadId: null, view: emptyView(), starting: false, busy: false });
       },
 
       send: (text, files) =>
@@ -482,7 +493,7 @@ export function createAppStore(
           // Still starting: abort the pending upload/POST and free the guard.
           abort?.abort();
           busyToken = null;
-          set({ starting: false });
+          set({ starting: false, busy: false });
           return;
         }
         const { runId, run: state } = get().view;

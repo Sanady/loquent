@@ -6,6 +6,8 @@ afterEach(() => {
   cleanup();
   document.documentElement.removeAttribute("style");
   document.documentElement.removeAttribute("data-lq-custom-colors");
+  // Opening a thread writes #t=<id>; a later test's store would reopen it on init.
+  if (window.location.hash) history.replaceState(null, "", window.location.pathname + window.location.search);
   try {
     localStorage.clear();
   } catch {

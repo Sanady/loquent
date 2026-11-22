@@ -1,0 +1,72 @@
+@layer lq.components {
+  /* The empty conversation: the app name set large in the display face, one line under it,
+   * and (only when configured) suggestion chips. It is the shell's one entrance motion. */
+
+  [data-lq-part~="empty-state"] {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: clamp(var(--lq-space-10), 24vh, calc(var(--lq-space-10) * 3.5)) 0 var(--lq-space-8);
+    text-align: center;
+    animation: lq-enter var(--lq-duration-normal) var(--lq-ease) both;
+  }
+
+  .lq-empty-logo {
+    display: block;
+    height: 44px;
+    width: auto;
+    max-width: 180px;
+    margin: 0 auto var(--lq-space-5);
+    object-fit: contain;
+  }
+
+  .lq-empty-title {
+    margin: 0 0 var(--lq-space-2);
+    font-family: var(--lq-font-display);
+    font-size: calc(var(--lq-text-2xl) * 1.5);
+    font-weight: var(--lqi-display-weight, var(--lq-weight-semibold));
+    letter-spacing: var(--lqi-display-tracking, -0.025em);
+    line-height: var(--lq-leading-tight);
+    text-wrap: balance;
+  }
+
+  .lq-empty-sub {
+    margin: 0;
+    color: var(--lq-text-muted);
+    font-size: var(--lq-text-base);
+  }
+
+  .lq-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--lq-space-2);
+    margin: var(--lq-space-7) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .lq-suggestion {
+    max-width: 100%;
+    min-height: 34px;
+    padding: var(--lq-space-1) var(--lq-space-4);
+    border: 1px solid var(--lq-border);
+    border-radius: var(--lq-radius-pill);
+    background: var(--lq-surface);
+    color: var(--lq-text-muted);
+    font-size: var(--lq-text-sm);
+    box-shadow: var(--lq-shadow-1);
+    transition:
+      color var(--lq-duration-fast) var(--lq-ease),
+      background-color var(--lq-duration-fast) var(--lq-ease);
+  }
+  .lq-suggestion:hover {
+    background: color-mix(in srgb, var(--lq-text) 4%, var(--lq-surface));
+    color: var(--lq-text);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-lq-part~="empty-state"] {
+      animation: none;
+    }
+  }
+}

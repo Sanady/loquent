@@ -13,6 +13,12 @@ export const defaultConfig = (over: Partial<AppConfig> = {}): AppConfig => ({
   attachments: false,
   max_upload_mb: 20,
   allowed_upload_types: ["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf", "text/plain", "text/markdown", "text/csv", "application/json"],
+  default_theme: "system",
+  themes: ["graphite", "graphite-dark", "editorial", "midnight"],
+  allow_user_css: true,
+  allow_user_prefs: true,
+  lock_tokens: [],
+  max_user_css_kb: 64,
   ...over,
 });
 
@@ -26,7 +32,8 @@ export function fakeApi(config: AppConfig = defaultConfig(), over: Partial<Recor
     logout: vi.fn(async () => ({ ok: true })),
     me: vi.fn(async () => ({ user: { id: "u" }, csrf: "" })),
     threads: vi.fn(async () => []),
-    thread: vi.fn(),
+    // An empty thread by default, so opening a thread in a test never rejects.
+    thread: vi.fn(async (id: string) => ({ thread: { id, title: "", updated_at: new Date(0).toISOString() }, events: [], last_run: null })),
     renameThread: vi.fn(async () => ({})),
     deleteThread: vi.fn(async () => undefined),
     runEvents: vi.fn(),

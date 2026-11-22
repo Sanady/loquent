@@ -1,6 +1,8 @@
 import type { Ref } from "react";
-import type { ColorMode } from "../theme";
+import { part } from "../parts";
 import { useApp } from "../storeContext";
+import { plainTitle } from "../text";
+import { THEME_LABEL, THEME_SCHEME, type ThemeId } from "../themes";
 import { IconLogout, IconMoon, IconPlus, IconSidebar, IconSun } from "./icons";
 
 export function Header({
@@ -8,26 +10,32 @@ export function Header({
   navId,
   navOpen,
   onToggleNav,
-  mode,
-  onToggleMode,
+  theme,
+  onCycleTheme,
 }: {
   toggleRef?: Ref<HTMLButtonElement>;
   navId: string | null;
   navOpen: boolean;
   onToggleNav: () => void;
-  mode: ColorMode;
-  /** null when a brand palette fixes the colors; the toggle is then hidden. */
-  onToggleMode: (() => void) | null;
+  theme: ThemeId;
+  /** Temporary: cycles the allowed themes (Task 10 replaces it with Appearance). null hides it. */
+  onCycleTheme: (() => void) | null;
 }) {
   const appName = useApp((s) => s.config?.app_name ?? "");
+  // The open thread's title; the app name when no thread is open or it has no title yet.
+  const threadTitle = useApp((s) => {
+    const t = s.currentThreadId ? s.threads.find((x) => x.id === s.currentThreadId) : undefined;
+    return t ? plainTitle(t.title) : "";
+  });
+  const title = threadTitle || appName;
   const logo = useApp((s) => s.config?.logo_url ?? null);
   const canLogout = useApp((s) => s.config?.auth === "password" && s.user !== null);
   const logout = useApp((s) => s.logout);
   const newThread = useApp((s) => s.newThread);
-  const next = mode === "dark" ? "light" : "dark";
+  const themeLabel = `Theme: ${THEME_LABEL[theme]}`;
 
   return (
-    <header className="lq-header">
+    <header className="lq-header" {...part("header")}>
       {navId && (
         <button
           ref={toggleRef}
@@ -42,19 +50,20 @@ export function Header({
           <IconSidebar />
         </button>
       )}
-      <div className="lq-brand">
-        {logo && <img src={logo} alt="" className="lq-logo" />}
-        <span className="lq-brand-name">{appName}</span>
+      {/* With the chat list hidden, the header is the only place the brand appears. */}
+      {!navId && logo && <img src={logo} alt="" className="lq-logo" />}
+      <div className="lq-header-title" {...part("header-title")} title={title}>
+        {title}
       </div>
-      <div className="lq-header-actions">
+      <div className="lq-header-actions" {...part("header-actions")}>
         {!navId && (
           <button type="button" className="lq-icon-btn" aria-label="New chat" title="New chat" onClick={newThread}>
             <IconPlus />
           </button>
         )}
-        {onToggleMode && (
-          <button type="button" className="lq-icon-btn" aria-label={`Switch to ${next} theme`} title={`Switch to ${next} theme`} onClick={onToggleMode}>
-            {mode === "dark" ? <IconSun /> : <IconMoon />}
+        {onCycleTheme && (
+          <button type="button" className="lq-icon-btn" aria-label={themeLabel} title={themeLabel} onClick={onCycleTheme}>
+            {THEME_SCHEME[theme] === "dark" ? <IconMoon /> : <IconSun />}
           </button>
         )}
         {canLogout && (

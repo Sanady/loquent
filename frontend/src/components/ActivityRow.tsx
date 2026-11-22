@@ -1,6 +1,7 @@
 import { useId, useState, type ReactNode } from "react";
+import { part } from "../parts";
 import type { Item } from "../state/reducer";
-import { IconCheck, IconChevron, IconTool, Spinner } from "./icons";
+import { IconChevron } from "./icons";
 
 type Step = Extract<Item, { kind: "step" }>;
 type Tool = Extract<Item, { kind: "tool" }>;
@@ -14,32 +15,47 @@ function pretty(raw: string | undefined): string {
   }
 }
 
+/** A row's status. "stopped": it was still running when its run ended, so it never will finish. */
+export type ActivityStatus = "running" | "done" | "stopped";
+
+/** The status of a step or tool: one still "running" after its run ended is "stopped". */
+export function activityStatus(item: Step | Tool, runEnded: boolean): ActivityStatus {
+  if (item.status !== "running") return "done";
+  return runEnded ? "stopped" : "running";
+}
+
+const STATE = { running: "running", done: "done", stopped: "stopped" } as const;
+
 function Row({
-  icon,
   label,
   kind,
-  running,
+  status,
   children,
 }: {
-  icon?: ReactNode;
   label: string;
   kind: string;
-  running: boolean;
+  status: ActivityStatus;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const id = useId();
   return (
-    <div className={`lq-activity lq-activity-${kind}${open ? " is-open" : ""}`}>
-      <button type="button" className="lq-activity-head" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>
+    <div
+      className={`lq-activity lq-activity-${kind}${open ? " is-open" : ""}`}
+      {...part(["activity", kind === "tool" ? "activity-tool" : "activity-step"], { state: STATE[status] })}
+    >
+      <button
+        type="button"
+        className="lq-activity-head"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="lq-activity-dot" aria-hidden="true" />
+        <span className="lq-activity-label">{label}</span>
+        <span className="lq-sr">{status}</span>
         <span className="lq-activity-chevron">
           <IconChevron />
-        </span>
-        {icon}
-        <span className="lq-activity-label">{label}</span>
-        <span className="lq-activity-status">
-          {running ? <Spinner /> : <IconCheck />}
-          <span className="lq-sr">{running ? "running" : "done"}</span>
         </span>
       </button>
       {open && (
@@ -51,26 +67,30 @@ function Row({
   );
 }
 
-export function StepRow({ item }: { item: Step }) {
+const STEP_NOTE: Record<ActivityStatus, string> = { running: "In progress…", done: "Completed", stopped: "Stopped before it finished" };
+
+export function StepRow({ item, runEnded = false }: { item: Step; runEnded?: boolean }) {
+  const status = activityStatus(item, runEnded);
   return (
-    <Row label={item.name} kind="step" running={item.status === "running"}>
-      <p className="lq-activity-note">{item.status === "running" ? "In progress…" : "Completed"}</p>
+    <Row label={item.name} kind="step" status={status}>
+      <p className="lq-activity-note">{STEP_NOTE[status]}</p>
     </Row>
   );
 }
 
-export function ToolRow({ item }: { item: Tool }) {
+export function ToolRow({ item, runEnded = false }: { item: Tool; runEnded?: boolean }) {
+  const status = activityStatus(item, runEnded);
   const args = pretty(item.args);
   const result = pretty(item.result);
   return (
-    <Row icon={<IconTool />} label={item.name} kind="tool" running={item.status === "running"}>
+    <Row label={item.name} kind="tool" status={status}>
       <div className="lq-io">
         <span className="lq-io-label">Arguments</span>
         <pre>{args || "{}"}</pre>
       </div>
       <div className="lq-io">
         <span className="lq-io-label">Result</span>
-        <pre>{item.status === "running" ? "Waiting for result…" : result || "(empty)"}</pre>
+        <pre>{status === "running" ? "Waiting for result…" : status === "stopped" ? "No result: the run ended first." : result || "(empty)"}</pre>
       </div>
     </Row>
   );

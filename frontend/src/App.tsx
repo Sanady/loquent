@@ -5,9 +5,11 @@ import { IconArrowDown, IconX } from "./components/icons";
 import { Login } from "./components/Login";
 import { MessageList } from "./components/MessageList";
 import { ThreadList } from "./components/ThreadList";
+import { part } from "./parts";
 import { appStore, type AppStore } from "./state/store";
 import { StoreProvider, useApp, useAppStore } from "./storeContext";
-import { applyTheme, useColorMode, type ColorMode } from "./theme";
+import { allowedThemes, applyAppearance, effectiveThemeId, previewTheme, useSystemDark, type ThemePref } from "./theme";
+import type { ThemeId } from "./themes";
 
 const NAV_ID = "lq-nav";
 const NARROW = "(max-width: 720px)";
@@ -57,7 +59,7 @@ function Notice() {
   );
 }
 
-function Chat({ mode, onToggleMode }: { mode: ColorMode; onToggleMode: (() => void) | null }) {
+function Chat({ theme, onCycleTheme }: { theme: ThemeId; onCycleTheme: (() => void) | null }) {
   const store = useAppStore();
   const showThreads = useApp((s) => !(s.config?.hide ?? []).includes("thread_list"));
   const items = useApp((s) => s.view.items);
@@ -141,7 +143,7 @@ function Chat({ mode, onToggleMode }: { mode: ColorMode; onToggleMode: (() => vo
   return (
     <div className={layout}>
       {showThreads && (
-        <div className="lq-nav-wrap" inert={!navOpen}>
+        <div className="lq-nav-wrap" inert={!navOpen} {...(narrow && drawerOpen ? part("drawer") : {})}>
           <ThreadList
             id={NAV_ID}
             onNavigate={() => narrow && setDrawerOpen(false)}
@@ -150,17 +152,17 @@ function Chat({ mode, onToggleMode }: { mode: ColorMode; onToggleMode: (() => vo
         </div>
       )}
       {showThreads && narrow && drawerOpen && <div className="lq-scrim" aria-hidden="true" onClick={() => setDrawerOpen(false)} />}
-      <div className="lq-main" inert={drawerModal}>
+      <div className="lq-main" inert={drawerModal} {...part("main")}>
         <Header
           toggleRef={toggleRef}
           navId={showThreads ? NAV_ID : null}
           navOpen={navOpen}
           onToggleNav={() => (narrow ? setDrawerOpen((o) => !o) : setCollapsed((c) => !c))}
-          mode={mode}
-          onToggleMode={onToggleMode}
+          theme={theme}
+          onCycleTheme={onCycleTheme}
         />
         <Notice />
-        <main className="lq-conversation" ref={scroller} onScroll={onScroll}>
+        <main className="lq-conversation" {...part("conversation")} ref={scroller} onScroll={onScroll}>
           <div className="lq-column">
             <MessageList />
           </div>
@@ -185,7 +187,9 @@ function Shell() {
   const config = useApp((s) => s.config);
   const needsLogin = useApp((s) => s.config?.auth === "password" && s.user === null);
   const [loaded, setLoaded] = useState(false);
-  const [mode, toggleMode] = useColorMode();
+  // The theme choice lasts for this page only until Task 9/10 add stored prefs.
+  const [pref, setPref] = useState<ThemePref | undefined>(undefined);
+  const dark = useSystemDark();
 
   const load = useCallback(() => {
     setLoaded(false);
@@ -196,10 +200,17 @@ function Shell() {
   }, [store]);
 
   useEffect(load, [load]);
-  // A configured brand background fixes the palette and its scheme in both modes (R25).
-  const [brandScheme, setBrandScheme] = useState<ColorMode | null>(null);
-  useLayoutEffect(() => setBrandScheme(applyTheme(config?.theme).scheme), [config?.theme]);
-  const effectiveMode = brandScheme ?? mode;
+
+  const themes = allowedThemes(config?.themes);
+  // `?theme=<id>` previews an allowed theme and wins over any pref (preview > pref > default).
+  // It is never stored. Tasks 9/10: keep this precedence when prefs become persistent.
+  const preview = previewTheme(window.location.search, themes);
+  const brand = config?.theme ?? null;
+  // A brand background fixes what "system" means (its scheme, not the OS's).
+  const theme = effectiveThemeId(preview, pref, { default_theme: config?.default_theme, themes, brand }, dark);
+  const locks = config?.lock_tokens;
+  useLayoutEffect(() => applyAppearance({ theme }, brand, document.documentElement, locks ?? []), [theme, brand, locks]);
+  const cycleTheme = useCallback(() => setPref(themes[(themes.indexOf(theme) + 1) % themes.length]), [themes, theme]);
   useEffect(() => {
     if (config?.app_name) document.title = config.app_name;
   }, [config?.app_name]);
@@ -220,11 +231,12 @@ function Shell() {
   } else if (needsLogin) {
     body = <Login />;
   } else {
-    body = <Chat mode={effectiveMode} onToggleMode={brandScheme ? null : toggleMode} />;
+    // The temporary cycle button would fight a ?theme= preview (which wins), so it hides then.
+    body = <Chat theme={theme} onCycleTheme={themes.length > 1 && !preview ? cycleTheme : null} />;
   }
 
   return (
-    <div className="lq-root" data-mode={effectiveMode}>
+    <div className="lq-root" {...part("app")}>
       {body}
     </div>
   );

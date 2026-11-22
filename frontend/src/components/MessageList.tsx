@@ -1,3 +1,4 @@
+import { part } from "../parts";
 import type { Item } from "../state/reducer";
 import { useApp } from "../storeContext";
 import { renderWidget } from "../widgets/registry";
@@ -13,22 +14,45 @@ function lastAssistantIndex(items: Item[]): number {
   return -1;
 }
 
-function ErrorItem({ item }: { item: Extract<Item, { kind: "error" }> }) {
+/** An error in the conversation. The one that ended a failed run carries its Retry. */
+function ErrorItem({ item, onRetry, busy }: { item: Extract<Item, { kind: "error" }>; onRetry?: () => void; busy?: boolean }) {
   return (
-    <div className="lq-error">
+    <div className="lq-error" {...part("error", { state: "error" })}>
       <IconAlert />
-      <span>{item.message}</span>
+      <span className="lq-error-text">{item.message}</span>
+      {onRetry && (
+        <button type="button" className="lq-btn lq-btn-sm" onClick={onRetry} disabled={busy}>
+          <IconRefresh />
+          Retry
+        </button>
+      )}
     </div>
   );
 }
 
-function EmptyState() {
+/**
+ * The greeting: a heading and one line under it. Suggestion chips render only when some are
+ * passed; nothing configures them yet, so MessageList passes none.
+ */
+export function EmptyState({ suggestions = [] }: { suggestions?: readonly string[] }) {
   const logo = useApp((s) => s.config?.logo_url ?? null);
+  const send = useApp((s) => s.send);
   return (
-    <div className="lq-empty">
+    <div className="lq-empty" {...part("empty-state")}>
       {logo && <img className="lq-empty-logo" src={logo} alt="" />}
-      <h1>How can I help?</h1>
-      <p>Ask a question or describe what you need.</p>
+      <h1 className="lq-empty-title">How can I help?</h1>
+      <p className="lq-empty-sub">Ask a question or describe what you need.</p>
+      {suggestions.length > 0 && (
+        <ul className="lq-suggestions" aria-label="Suggestions">
+          {suggestions.map((s) => (
+            <li key={s}>
+              <button type="button" className="lq-suggestion" onClick={() => void send(s, [])}>
+                {s}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -36,6 +60,8 @@ function EmptyState() {
 export function MessageList() {
   const view = useApp((s) => s.view);
   const starting = useApp((s) => s.starting);
+  // Regenerate/Retry are refused while busy (e.g. the last run's stream is still closing).
+  const busy = useApp((s) => s.busy);
   const regenerate = useApp((s) => s.regenerate);
   const { items, run } = view;
   const running = run === "running";
@@ -53,6 +79,11 @@ export function MessageList() {
     if (it.kind === "widget" && it.answer === undefined) lastPending = i;
   });
   if (lastPending < lastUser) lastPending = -1;
+  // A step or tool still "running" is stopped once its run is over: the run is no longer live,
+  // or it belongs to an earlier turn (before the last user message).
+  const runLive = starting || running;
+  // A failed run that ended on an error offers Retry on the error itself, not in a run note.
+  const retryOnError = !starting && run === "failed" && last?.kind === "error";
   const showTyping =
     (running || starting) && !(last?.kind === "message" && last.role === "assistant" && last.streaming);
 
@@ -67,7 +98,7 @@ export function MessageList() {
                 item={it}
                 actions={
                   i === regenAt ? (
-                    <button type="button" className="lq-action" onClick={() => void regenerate()} aria-label="Regenerate response" title="Regenerate">
+                    <button type="button" className="lq-action" onClick={() => void regenerate()} disabled={busy} aria-label="Regenerate response" title="Regenerate">
                       <IconRefresh />
                     </button>
                   ) : undefined
@@ -75,26 +106,35 @@ export function MessageList() {
               />
             );
           case "step":
-            return <StepRow key={`s-${i}`} item={it} />;
+            return <StepRow key={`s-${i}`} item={it} runEnded={!runLive || i < lastUser} />;
           case "tool":
-            return <ToolRow key={`t-${it.id}`} item={it} />;
+            return <ToolRow key={`t-${it.id}`} item={it} runEnded={!runLive || i < lastUser} />;
           case "widget":
             return <div key={`w-${it.id}`} className="lq-widget-slot">{renderWidget(it, { interactive: i === lastPending })}</div>;
           case "error":
-            return <ErrorItem key={`e-${i}`} item={it} />;
+            return (
+              <ErrorItem
+                key={`e-${i}`}
+                item={it}
+                onRetry={retryOnError && i === items.length - 1 ? () => void regenerate() : undefined}
+                busy={busy}
+              />
+            );
           default:
             return null;
         }
       })}
       {showTyping && (
-        <div className="lq-msg lq-msg-assistant">
-          <Typing />
+        <div className="lq-msg lq-msg-assistant" {...part("message", { role: "assistant", state: "streaming" })}>
+          <div {...part("message-assistant")}>
+            <Typing />
+          </div>
         </div>
       )}
-      {!starting && (run === "failed" || run === "interrupted") && (
+      {!starting && !retryOnError && (run === "failed" || run === "interrupted") && (
         <div className="lq-run-note">
           <span>{run === "interrupted" ? "The response was interrupted." : "The response did not finish."}</span>
-          <button type="button" className="lq-btn lq-btn-quiet" onClick={() => void regenerate()}>
+          <button type="button" className="lq-btn lq-btn-quiet" onClick={() => void regenerate()} disabled={busy}>
             <IconRefresh />
             Retry
           </button>

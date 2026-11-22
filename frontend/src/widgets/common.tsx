@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { part, type PartName } from "../parts";
 import { useApp, useAppStore } from "../storeContext";
 import type { WidgetItem } from "./registry";
 
@@ -17,7 +18,7 @@ export function argsObject(item: WidgetItem): Record<string, unknown> | null {
 
 export function Fallback({ message }: { message?: string }) {
   return (
-    <div className="lq-widget lq-widget-fallback">
+    <div className="lq-widget lq-widget-fallback" {...part("widget")}>
       {message ? <p className="lq-widget-message">{message}</p> : null}
       <p className="lq-widget-pending">This form can't be displayed.</p>
     </div>
@@ -26,27 +27,34 @@ export function Fallback({ message }: { message?: string }) {
 
 export function Pending() {
   return (
-    <div className="lq-widget" role="status">
+    <div className="lq-widget" role="status" {...part("widget")}>
       <p className="lq-widget-pending">Preparing…</p>
     </div>
   );
 }
 
+const WIDGET_PART: Record<string, PartName> = {
+  confirm: "widget-confirm",
+  select: "widget-select",
+  form: "widget-form",
+};
+
 export function Shell({ widget, children }: { widget: string; children: ReactNode }) {
   return (
-    <div className="lq-widget" data-widget={widget}>
+    <div className="lq-widget" data-widget={widget} {...part(WIDGET_PART[widget] ? ["widget", WIDGET_PART[widget]] : "widget")}>
       {children}
     </div>
   );
 }
 
 /**
- * Shared submit logic: answer through the store, stay disabled while the answer run starts and
- * runs, and re-enable if the call settles without the widget being answered (refused or failed).
+ * Shared submit logic: answer through the store, stay disabled while the store would refuse a
+ * run (busy: also after RUN_FINISHED until the run's stream closes) or one runs, and re-enable
+ * if the call settles without the widget being answered (refused or failed).
  */
 export function useAnswer(item: WidgetItem, interactive: boolean) {
   const store = useAppStore();
-  const busy = useApp((s) => s.starting || s.view.run === "running");
+  const busy = useApp((s) => s.starting || s.busy || s.view.run === "running");
   const [sent, setSent] = useState(false);
   const mounted = useRef(true);
   useEffect(() => {

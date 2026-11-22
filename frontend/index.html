@@ -10,7 +10,8 @@
   <body>
     <div id="root"></div>
     <!--
-      Optional operator stylesheet (404 when not configured). It sits in <body> so it comes
+      Optional operator stylesheet: an empty stylesheet when custom_css_path is unset, a 404
+      (and a startup warning) when it is set but the file is missing. It sits in <body> so it comes
       after the app CSS in document order, both in the build (CSS link in <head>) and in dev
       (<style> tags appended to <head>), and can therefore override anything.
     -->

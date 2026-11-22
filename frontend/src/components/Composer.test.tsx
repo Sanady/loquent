@@ -21,6 +21,36 @@ const deferred = <T,>() => {
 };
 
 describe("Composer", () => {
+  it("the composer part is the visible card, and its keyboard ring follows input modality", () => {
+    const store = readyStore();
+    const box = renderComposer(store);
+    const card = box.closest('[data-lq-part~="composer"]')!;
+    expect(card.classList.contains("lq-composer-box")).toBe(true);
+    expect(card.tagName).not.toBe("FORM");
+
+    // Reached by Tab: the ring class is on while focused, off on blur.
+    act(() => box.blur());
+    fireEvent.keyDown(window, { key: "Tab" });
+    act(() => box.focus());
+    expect(card.classList.contains("is-kbd-focus")).toBe(true);
+    act(() => box.blur());
+    expect(card.classList.contains("is-kbd-focus")).toBe(false);
+
+    // A click inside the keyboard-focused box drops the ring.
+    act(() => box.blur());
+    fireEvent.keyDown(window, { key: "Tab" });
+    act(() => box.focus());
+    expect(card.classList.contains("is-kbd-focus")).toBe(true);
+    fireEvent.pointerDown(box);
+    expect(card.classList.contains("is-kbd-focus")).toBe(false);
+
+    // Reached by pointer: no ring.
+    act(() => box.blur());
+    fireEvent.pointerDown(window);
+    act(() => box.focus());
+    expect(card.classList.contains("is-kbd-focus")).toBe(false);
+  });
+
   it("send is disabled without text and enabled with text", () => {
     const store = readyStore();
     const box = renderComposer(store);
@@ -97,6 +127,20 @@ describe("Composer", () => {
     act(() => store.setState({ view: view([], "idle"), starting: true }));
     fireEvent.keyDown(box, { key: "Enter" });
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it("send is disabled while the previous run's stream is still open (busy), not Stop", () => {
+    const store = readyStore({ view: view([userMsg("u1", "x")], "idle"), busy: true });
+    const send = vi.fn(async () => false);
+    store.setState({ send });
+    const box = renderComposer(store);
+    fireEvent.change(box, { target: { value: "hi" } });
+    const btn = screen.getByRole("button", { name: "Send message" }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(send).not.toHaveBeenCalled();
+    act(() => store.setState({ busy: false }));
+    expect(btn.disabled).toBe(false);
   });
 
   it("attach button only when config.attachments; files can be sent alone", () => {

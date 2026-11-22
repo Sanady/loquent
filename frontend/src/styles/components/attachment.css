@@ -1,0 +1,100 @@
+@layer lq.components {
+  /* Attachment chips: in a message (buttons that open the file) and in the composer's
+   * pending list (static, with a remove button). A small thumbnail or file icon, the name
+   * and a muted size, on surface-raised with a hairline border. */
+
+  .lq-chips,
+  .lq-pending {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--lq-space-2);
+  }
+  [data-lq-role="user"] > .lq-chips {
+    justify-content: flex-end;
+  }
+  .lq-pending {
+    margin: 0 0 var(--lq-space-2);
+    padding: var(--lq-space-1) 0 0;
+    list-style: none;
+  }
+
+  .lq-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--lq-space-2);
+    max-width: 280px;
+    min-height: 40px;
+    padding: var(--lq-space-1) var(--lq-space-3) var(--lq-space-1) var(--lq-space-1);
+    border: 1px solid var(--lq-border);
+    border-radius: var(--lq-radius-md);
+    background: var(--lq-surface-raised);
+    color: var(--lq-text);
+    font-size: var(--lq-text-sm);
+    line-height: var(--lq-leading-tight);
+    text-align: left;
+    transition:
+      border-color var(--lq-duration-fast) var(--lq-ease),
+      box-shadow var(--lq-duration-fast) var(--lq-ease);
+  }
+  button.lq-chip:hover {
+    border-color: color-mix(in srgb, var(--lq-border-strong) 45%, var(--lq-border));
+    box-shadow: var(--lq-shadow-1);
+  }
+  .lq-chip[aria-busy="true"] {
+    opacity: 0.7;
+  }
+  [data-lq-part~="attachment"][data-lq-state="error"] {
+    border-color: var(--lq-danger);
+  }
+  .lq-chip-static {
+    padding-right: var(--lq-space-1);
+  }
+
+  .lq-chip-thumb {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    overflow: hidden;
+    border-radius: var(--lq-radius-sm);
+    background: var(--lq-bg-subtle);
+    color: var(--lq-text-muted);
+  }
+  .lq-chip-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .lq-chip-name {
+    min-width: 0;
+    overflow: hidden;
+    font-weight: var(--lq-weight-medium);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .lq-chip-size {
+    flex: none;
+    color: var(--lq-text-muted);
+    font-size: var(--lq-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .lq-chip-remove {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--lq-radius-sm);
+    background: transparent;
+    color: var(--lq-text-muted);
+  }
+  .lq-chip-remove:hover {
+    background: color-mix(in srgb, var(--lq-text) 6%, transparent);
+    color: var(--lq-text);
+  }
+}

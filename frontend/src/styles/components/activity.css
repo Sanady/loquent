@@ -1,0 +1,171 @@
+@layer lq.components {
+  /* Steps and tool calls: compact pill cards (radius-pill, a hairline border) led by a status
+   * mark that differs in shape as well as hue: a hollow accent ring while running, a solid
+   * success dot when done, a solid danger dot when its run ended first (state stopped).
+   * Opening one turns the pill into a full-width card, on the same fill, that shows the
+   * arguments and result in the mono face. */
+
+  /* Pill fill (--lqi-activity-bg) and the dot's halo (--lqi-dot-glow): themes tune both in
+   * lq.themes; the defaults are the fallbacks at each use. */
+
+  [data-lq-part~="activity"] {
+    --lqi-dot: var(--lq-success);
+    align-self: flex-start;
+    max-width: 100%;
+    border: 1px solid var(--lq-border);
+    border-radius: var(--lq-radius-pill);
+    background: var(--lqi-activity-bg, var(--lq-surface));
+    color: var(--lq-text-muted);
+    font-size: var(--lq-text-sm);
+    line-height: var(--lq-leading-tight);
+  }
+  [data-lq-part~="activity"][data-lq-state="running"] {
+    --lqi-dot: var(--lq-accent);
+  }
+  [data-lq-part~="activity"][data-lq-state="stopped"] {
+    --lqi-dot: var(--lq-danger);
+  }
+
+  /* Consecutive rows read as one cluster. */
+  [data-lq-part~="activity"] + [data-lq-part~="activity"] {
+    margin-top: calc(var(--lq-space-2) - var(--lq-space-6));
+  }
+
+  .lq-activity-head {
+    display: flex;
+    align-items: center;
+    gap: var(--lq-space-2);
+    width: 100%;
+    min-height: 30px;
+    padding: var(--lq-space-1) var(--lq-space-2) var(--lq-space-1) var(--lq-space-3);
+    border: 0;
+    border-radius: inherit;
+    background: none;
+    color: inherit;
+    text-align: left;
+    transition: color var(--lq-duration-fast) var(--lq-ease);
+  }
+  .lq-activity-head:hover {
+    color: var(--lq-text);
+  }
+
+  .lq-activity-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--lq-radius-pill);
+    background: currentColor;
+    color: var(--lqi-dot);
+    box-shadow: var(--lqi-dot-glow, none);
+  }
+  /* Running: a hollow ring (an inset 2px edge), so it reads apart from done without hue. */
+  [data-lq-state="running"] > .lq-activity-head .lq-activity-dot {
+    background: transparent;
+    outline: 2px solid currentColor;
+    outline-offset: -2px;
+    animation: lq-dot-pulse 1.4s var(--lq-ease) infinite;
+  }
+
+  .lq-activity-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-lq-part~="activity-tool"] .lq-activity-label {
+    font-family: var(--lq-font-mono);
+    font-size: var(--lq-text-xs);
+  }
+
+  .lq-activity-chevron {
+    display: grid;
+    flex: none;
+    place-items: center;
+    color: var(--lq-text-subtle);
+    transition: transform var(--lq-duration-normal) var(--lq-ease);
+  }
+  .lq-activity-head[aria-expanded="true"] .lq-activity-chevron {
+    transform: rotate(90deg);
+  }
+
+  /* ---------- open ---------- */
+
+  [data-lq-part~="activity"].is-open {
+    align-self: stretch;
+    border-radius: var(--lq-radius-lg);
+  }
+  [data-lq-part~="activity"].is-open .lq-activity-head {
+    padding-left: var(--lq-space-4);
+    color: var(--lq-text);
+  }
+  [data-lq-part~="activity"].is-open .lq-activity-label {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .lq-activity-body {
+    display: grid;
+    gap: var(--lq-space-3);
+    padding: var(--lq-space-3) var(--lq-space-4) var(--lq-space-4);
+    border-top: 1px solid var(--lq-border);
+    animation: lq-enter-fade var(--lq-duration-normal) var(--lq-ease);
+  }
+  .lq-activity-note {
+    margin: 0;
+    color: var(--lq-text-muted);
+  }
+
+  .lq-io {
+    display: grid;
+    gap: var(--lq-space-1);
+    min-width: 0;
+  }
+  .lq-io-label {
+    color: var(--lq-text-muted);
+    font-size: var(--lq-text-xs);
+    font-weight: var(--lq-weight-semibold);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .lq-io pre {
+    max-height: 320px;
+    margin: 0;
+    padding: var(--lq-space-3);
+    overflow: auto;
+    border-radius: var(--lq-radius-md);
+    background: var(--lq-code-bg);
+    color: var(--lq-text);
+    font-family: var(--lq-font-mono);
+    font-size: var(--lq-text-xs);
+    line-height: var(--lq-leading-normal);
+    font-variant-ligatures: none;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  @keyframes lq-dot-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  /* Forced colors drop backgrounds, which would erase the done and stopped dots. A border
+   * (forced to the text color) fills them instead; the running ring is an outline and stays. */
+  @media (forced-colors: active) {
+    [data-lq-part~="activity"]:not([data-lq-state="running"]) > .lq-activity-head .lq-activity-dot {
+      box-sizing: border-box;
+      border: 4px solid;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-lq-state="running"] > .lq-activity-head .lq-activity-dot,
+    .lq-activity-body {
+      animation: none;
+    }
+  }
+}

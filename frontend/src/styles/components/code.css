@@ -1,0 +1,109 @@
+@layer lq.components {
+  /* Fenced code: a code-bg panel with a header row (language, copy) in the mono face at
+   * text-sm. Syntax colors come from seven private --lqi-syntax-* knobs that each theme sets
+   * (styles/themes/*.css) at 4.5:1 or better on its code-bg; highlight.js classes map onto them
+   * here, so no third-party highlight theme is loaded. */
+
+  /* Fallback palette: text and muted only, which hold 4.5:1 on code-bg by construction. It is
+   * the default before a theme applies (the var() fallbacks below), and it replaces the theme's
+   * palette when a brand background owns the colors (R25) and one of the theme's syntax colors
+   * misses 4.5:1 on the brand's code-bg: theme.ts checks and sets data-lqi-syntax="mono" on
+   * <html>. Set on .lq-root so it beats the theme's values on <html>. */
+  [data-lqi-syntax="mono"] .lq-root {
+    --lqi-syntax-keyword: var(--lq-text);
+    --lqi-syntax-string: var(--lq-text);
+    --lqi-syntax-number: var(--lq-text);
+    --lqi-syntax-title: var(--lq-text);
+    --lqi-syntax-type: var(--lq-text);
+    --lqi-syntax-meta: var(--lq-text-muted);
+    --lqi-syntax-comment: var(--lq-text-muted);
+  }
+
+  [data-lq-part~="code-block"] {
+    margin: 0 0 var(--lq-space-4);
+    overflow: hidden;
+    border: 1px solid var(--lq-border);
+    border-radius: var(--lq-radius-lg);
+    background: var(--lq-code-bg);
+  }
+
+  .lq-code-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--lq-space-2);
+    min-height: 36px;
+    padding: var(--lq-space-1) var(--lq-space-2) var(--lq-space-1) var(--lq-space-4);
+    border-bottom: 1px solid var(--lq-border);
+    color: var(--lq-text-muted);
+    font-family: var(--lq-font-mono);
+    font-size: var(--lq-text-xs);
+    line-height: var(--lq-leading-tight);
+  }
+  .lq-code-lang {
+    letter-spacing: 0.02em;
+    text-transform: lowercase;
+  }
+
+  [data-lq-part~="code-block"] pre {
+    margin: 0;
+    padding: var(--lq-space-4);
+    overflow-x: auto;
+    font-family: var(--lq-font-mono);
+    font-size: var(--lq-text-sm);
+    line-height: var(--lq-leading-normal);
+    tab-size: 4;
+    /* Code shows the characters typed: no "->" or "=>" ligatures. */
+    font-variant-ligatures: none;
+  }
+  [data-lq-part~="code-block"] code {
+    padding: 0;
+    background: transparent;
+    color: var(--lq-text);
+    font-family: inherit;
+    font-size: inherit;
+  }
+
+  /* ---------- syntax ---------- */
+
+  [data-lq-part~="markdown"] :is(.hljs-keyword, .hljs-doctag, .hljs-template-tag, .hljs-selector-tag, .hljs-variable.language_) {
+    color: var(--lqi-syntax-keyword, var(--lq-text));
+  }
+  [data-lq-part~="markdown"] :is(.hljs-string, .hljs-regexp, .hljs-char.escape_, .hljs-meta .hljs-string) {
+    color: var(--lqi-syntax-string, var(--lq-text));
+  }
+  [data-lq-part~="markdown"] :is(.hljs-number, .hljs-literal, .hljs-symbol, .hljs-bullet, .hljs-link) {
+    color: var(--lqi-syntax-number, var(--lq-text));
+  }
+  [data-lq-part~="markdown"] :is(.hljs-title, .hljs-section, .hljs-name, .hljs-selector-id, .hljs-selector-class) {
+    color: var(--lqi-syntax-title, var(--lq-text));
+  }
+  [data-lq-part~="markdown"] :is(.hljs-type, .hljs-built_in, .hljs-attr, .hljs-attribute, .hljs-property, .hljs-selector-attr, .hljs-selector-pseudo, .hljs-variable, .hljs-template-variable) {
+    color: var(--lqi-syntax-type, var(--lq-text));
+  }
+  [data-lq-part~="markdown"] :is(.hljs-meta, .hljs-meta .hljs-keyword) {
+    color: var(--lqi-syntax-meta, var(--lq-text-muted));
+  }
+  [data-lq-part~="markdown"] :is(.hljs-comment, .hljs-quote) {
+    color: var(--lqi-syntax-comment, var(--lq-text-muted));
+    font-style: italic;
+  }
+  [data-lq-part~="markdown"] :is(.hljs-section, .hljs-strong) {
+    font-weight: var(--lq-weight-semibold);
+  }
+  [data-lq-part~="markdown"] .hljs-emphasis {
+    font-style: italic;
+  }
+  /* Diffs: the text color on a status tint, so the line stays readable in every theme. */
+  [data-lq-part~="markdown"] :is(.hljs-addition, .hljs-deletion) {
+    display: inline-block;
+    min-width: 100%;
+    color: var(--lq-text);
+  }
+  [data-lq-part~="markdown"] .hljs-addition {
+    background: color-mix(in srgb, var(--lq-success) 14%, transparent);
+  }
+  [data-lq-part~="markdown"] .hljs-deletion {
+    background: color-mix(in srgb, var(--lq-danger) 14%, transparent);
+  }
+}

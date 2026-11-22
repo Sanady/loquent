@@ -5,6 +5,9 @@ import { expect, test, type Page } from "@playwright/test";
 async function send(page: Page, text: string) {
   const box = page.getByRole("textbox", { name: "Message" });
   await box.fill(text);
+  // Send stays disabled until the previous run's stream has closed (store `busy`); Enter
+  // before then keeps the draft and sends nothing, so wait like a user would.
+  await expect(page.getByRole("button", { name: "Send message" })).toBeEnabled();
   await box.press("Enter");
 }
 

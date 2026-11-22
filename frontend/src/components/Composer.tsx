@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type
 import { useApp, useAppStore } from "../storeContext";
 import { formatSize } from "./AttachmentChip";
 import { IconFile, IconPaperclip, IconSend, IconStop, IconX } from "./icons";
+import { part } from "../parts";
 
 const MAX_ROWS_PX = 220;
 
@@ -18,6 +19,8 @@ export function Composer() {
   const store = useAppStore();
   const starting = useApp((s) => s.starting);
   const running = useApp((s) => s.view.run === "running");
+  // The store refuses a send while busy (e.g. the last run's stream is still closing).
+  const locked = useApp((s) => s.busy);
   const attachments = useApp((s) => s.config?.attachments ?? false);
   const maxMb = useApp((s) => s.config?.max_upload_mb ?? 0);
   const allowedTypes = useApp((s) => s.config?.allowed_upload_types);
@@ -36,9 +39,31 @@ export function Composer() {
   }, []);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // The accent focus ring shows only when the box was reached from the keyboard. Text fields
+  // match :focus-visible on every focus (click and the automatic focus included), so CSS alone
+  // can't tell; track the last input modality instead.
+  const keyboard = useRef(false);
+  const [kbdFocus, setKbdFocus] = useState(false);
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Tab") keyboard.current = true;
+    };
+    // A click (even inside the focused box) means the pointer is in use: drop the ring.
+    const onPointer = () => {
+      keyboard.current = false;
+      setKbdFocus(false);
+    };
+    window.addEventListener("keydown", onKey, true);
+    window.addEventListener("pointerdown", onPointer, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("pointerdown", onPointer, true);
+    };
+  }, []);
+
   const busy = starting || running;
   const hasContent = text.trim() !== "" || files.length > 0;
-  const canSubmit = !busy && hasContent;
+  const canSubmit = !busy && !locked && hasContent;
 
   // Grow with the content up to a cap, then scroll.
   useLayoutEffect(() => {
@@ -130,7 +155,7 @@ export function Composer() {
 
   return (
     <form className="lq-composer" aria-label="Message" onSubmit={onSubmit}>
-      <div className="lq-composer-box">
+      <div className={`lq-composer-box${kbdFocus ? " is-kbd-focus" : ""}`} {...part("composer")}>
         {files.length > 0 && (
           <ul className="lq-pending" aria-label="Files to send">
             {files.map((f, i) => (
@@ -155,6 +180,7 @@ export function Composer() {
         <textarea
           ref={boxRef}
           className="lq-input"
+          {...part("composer-input")}
           rows={1}
           aria-label="Message"
           placeholder="Send a message"
@@ -162,6 +188,8 @@ export function Composer() {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
+          onFocus={() => setKbdFocus(keyboard.current)}
+          onBlur={() => setKbdFocus(false)}
         />
         <div className="lq-composer-bar">
           {attachments && (
@@ -178,7 +206,7 @@ export function Composer() {
                   e.target.value = "";
                 }}
               />
-              <button type="button" className="lq-icon-btn" aria-label="Attach files" title="Attach files" onClick={() => fileRef.current?.click()}>
+              <button type="button" className="lq-icon-btn" {...part("composer-attach")} aria-label="Attach files" title="Attach files" onClick={() => fileRef.current?.click()}>
                 <IconPaperclip />
               </button>
             </>
@@ -187,11 +215,11 @@ export function Composer() {
             Enter to send · Shift+Enter for a new line
           </span>
           {busy ? (
-            <button type="button" className="lq-send is-stop" aria-label="Stop response" title="Stop" onClick={() => void store.getState().stop()}>
+            <button type="button" className="lq-send is-stop" {...part("composer-send", { state: "running" })} aria-label="Stop response" title="Stop" onClick={() => void store.getState().stop()}>
               <IconStop />
             </button>
           ) : (
-            <button type="submit" className="lq-send" aria-label="Send message" title="Send" disabled={!canSubmit}>
+            <button type="submit" className="lq-send" {...part("composer-send")} aria-label="Send message" title="Send" disabled={!canSubmit}>
               <IconSend />
             </button>
           )}

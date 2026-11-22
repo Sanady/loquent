@@ -549,6 +549,48 @@ describe("store", () => {
     expect(s.getState().starting).toBe(false);
   });
 
+  it("busy holds from the start until the run's stream closes, past RUN_FINISHED", async () => {
+    // The server sends RUN_FINISHED, then saves the run, then closes the stream; a new run
+    // is refused until then, and busy says so.
+    let close!: () => void;
+    const closed = new Promise<void>((r) => (close = r));
+    const api = fakeApi({
+      startRun: vi.fn(() =>
+        (async function* () {
+          yield* seqd([started(), { type: "RUN_FINISHED" }]);
+          await closed;
+        })(),
+      ),
+    });
+    const s = createAppStore(api);
+    expect(s.getState().busy).toBe(false);
+    const p = s.getState().send("a", []);
+    expect(s.getState().busy).toBe(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(s.getState().view.run).toBe("idle");
+    expect(s.getState().starting).toBe(false);
+    expect(s.getState().busy).toBe(true);
+    expect(await s.getState().answer("c1", true)).toBe(false);
+    close();
+    await p;
+    expect(s.getState().busy).toBe(false);
+  });
+
+  it("busy holds while a thread loads and clears on newThread", async () => {
+    let resolveThread!: (v: unknown) => void;
+    const api = fakeApi({ thread: vi.fn(() => new Promise((r) => (resolveThread = r))) });
+    const s = createAppStore(api);
+    const p = s.getState().openThread("t1");
+    expect(s.getState().busy).toBe(true);
+    resolveThread({ thread: { id: "t1", title: "", updated_at: "" }, events: [], last_run: null });
+    await p;
+    expect(s.getState().busy).toBe(false);
+    void s.getState().openThread("t2");
+    expect(s.getState().busy).toBe(true);
+    s.getState().newThread();
+    expect(s.getState().busy).toBe(false);
+  });
+
   it("stop before RUN_STARTED aborts the POST, and a later send works", async () => {
     const signals: AbortSignal[] = [];
     const api = fakeApi({

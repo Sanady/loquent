@@ -1,4 +1,5 @@
 import type { AgUiEvent, Attachment } from "../state/reducer";
+import type { ColorToken, ThemeId } from "../themes";
 import { parseSSE } from "./sse";
 
 export class ApiError extends Error {
@@ -21,6 +22,15 @@ export interface AppConfig {
   attachments: boolean;
   max_upload_mb: number;
   allowed_upload_types: string[];
+  /** A theme id, or "system" (the light/dark pair among `themes`). */
+  default_theme: ThemeId | "system";
+  /** The themes users may pick, in display order. */
+  themes: ThemeId[];
+  allow_user_css: boolean;
+  allow_user_prefs: boolean;
+  /** Color tokens users may not change (a locked token also locks its derived tokens). */
+  lock_tokens: ColorToken[];
+  max_user_css_kb: number;
 }
 export interface User {
   id?: string;
