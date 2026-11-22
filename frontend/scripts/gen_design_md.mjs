@@ -21,7 +21,7 @@ const ROLES = {
   "border-strong": "input outlines, meaningful borders (3:1 or better)",
   text: "body text and headings",
   "text-muted": "secondary text",
-  "text-subtle": "timestamps and hints only (3:1, never body copy)",
+  "text-subtle": "non-text decoration only: chevrons, icons (3:1, never text)",
   accent: "primary actions, links, active state",
   "accent-hover": "accent on hover or press",
   "accent-text": "text on accent fills",

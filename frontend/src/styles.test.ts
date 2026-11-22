@@ -93,6 +93,32 @@ describe("component css", () => {
     }
   });
 
+  it("text-subtle colors non-text decoration only (chevrons, icons), never text", () => {
+    // Rules as selector { body } at any nesting depth (comments stripped).
+    for (const [name, raw] of files()) {
+      for (const m of stripComments(raw).matchAll(/([^{};]+)\{([^{}]*)\}/g)) {
+        const selector = m[1].trim();
+        if (!/(?:^|[;\s])color\s*:\s*var\(--lq-text-subtle\)/.test(m[2])) continue;
+        expect(selector, `${name}: ${selector} sets text in text-subtle; use text-muted`).toMatch(/chevron|icon/);
+      }
+    }
+  });
+
+  it("focus styles never remove the outline (forced-colors keeps a transparent one)", () => {
+    for (const [name, raw] of files()) {
+      for (const [prop, value] of declarations(withoutVarFallbacks(stripComments(raw)))) {
+        if (prop === "outline") expect(value, `${name}: outline: ${value}`).not.toMatch(/^(?:none|0)$/);
+      }
+    }
+  });
+
+  it("status dots stay visible in forced-colors mode", () => {
+    const css = stripComments(COMPONENT_CSS["./styles/components/activity.css"]);
+    const forced = /@media\s*\(forced-colors:\s*active\)\s*\{([\s\S]*?)\n {2}\}/.exec(css)?.[1] ?? "";
+    expect(forced, "activity.css needs a forced-colors block").toContain(".lq-activity-dot");
+    expect(forced).toMatch(/border:\s*4px solid;|forced-color-adjust:\s*none/);
+  });
+
   it("main.tsx imports the stylesheets in cascade order", () => {
     const order = ["./styles/layers.css", "./styles/tokens.css", "./styles/themes/", "./styles/components/"];
     const at = order.map((p) => mainSrc.indexOf(`"${p}`));

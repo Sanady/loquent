@@ -156,7 +156,7 @@
   /* "Stopped": a quiet marker across the column, like a rule with a label. */
   .lq-run-note-quiet {
     flex-wrap: nowrap;
-    color: var(--lq-text-subtle);
+    color: var(--lq-text-muted);
     font-size: var(--lq-text-xs);
     font-weight: 500;
     letter-spacing: 0.04em;

@@ -153,6 +153,15 @@
     }
   }
 
+  /* Forced colors drop backgrounds, which would erase the done and stopped dots. A border
+   * (forced to the text color) fills them instead; the running ring is an outline and stays. */
+  @media (forced-colors: active) {
+    [data-lq-part~="activity"]:not([data-lq-state="running"]) > .lq-activity-head .lq-activity-dot {
+      box-sizing: border-box;
+      border: 4px solid;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     [data-lq-state="running"] > .lq-activity-head .lq-activity-dot,
     .lq-activity-body {

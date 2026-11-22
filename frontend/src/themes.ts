@@ -35,7 +35,7 @@ export const COLOR_TOKENS = [
   "border-strong",
   "text",
   "text-muted",
-  // Non-essential text only (timestamps, hints): held to 3:1, never body copy.
+  // Non-text decoration only (chevrons, icons): held to 3:1, never used for text.
   "text-subtle",
   "accent",
   "accent-hover",

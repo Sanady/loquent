@@ -64,11 +64,11 @@
     font-size: var(--lq-text-base);
     line-height: 1.5;
     resize: none;
-    outline: none;
   }
-  /* The box shows the focus ring (focus-within), so the field itself needs none. */
-  .lq-root [data-lq-part~="composer-input"]:focus-visible {
-    outline: none;
+  /* The box shows the focus ring (focus-within), so the field itself shows none. A transparent
+   * outline, not none: forced-colors mode paints it, so keyboard focus stays visible there. */
+  .lq-root [data-lq-part~="composer-input"]:focus {
+    outline: 2px solid transparent;
   }
   [data-lq-part~="composer-input"]::placeholder {
     color: var(--lq-text-muted);
@@ -83,7 +83,7 @@
   }
   .lq-composer-hint {
     margin-left: auto;
-    color: var(--lq-text-subtle);
+    color: var(--lq-text-muted);
     font-size: var(--lq-text-xs);
     white-space: nowrap;
   }

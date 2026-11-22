@@ -63,7 +63,7 @@ const AA_PAIRS: [fg: ColorToken, bg: ColorToken, min: number][] = [
       [fg, "surface", 4.5],
     ],
   ),
-  // text-subtle is for non-essential text only (timestamps, hints), so 3:1 not 4.5:1.
+  // text-subtle is for non-text decoration only (chevrons, icons), so 3:1 not 4.5:1.
   ["text-subtle", "bg", 3],
   ["text-subtle", "surface", 3],
 ];

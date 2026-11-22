@@ -177,7 +177,7 @@
     border-radius: var(--lq-radius-sm);
     background: var(--lq-surface);
     font-size: var(--lq-text-sm);
-    outline: none;
+    outline: 2px solid transparent;
     box-shadow: 0 0 0 3px var(--lq-accent-soft);
   }
 

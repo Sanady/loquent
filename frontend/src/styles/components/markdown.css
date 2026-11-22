@@ -58,7 +58,7 @@
     margin-bottom: var(--lq-space-2);
   }
   [data-lq-part~="markdown"] li::marker {
-    color: var(--lq-text-subtle);
+    color: var(--lq-text-muted);
   }
   [data-lq-part~="markdown"] .contains-task-list {
     padding-left: var(--lq-space-1);

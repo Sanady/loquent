@@ -39,9 +39,10 @@ JetBrains Mono for code. Shadows are navy-tinted with a cool highlight on the up
 ## 2. Colour palette and roles
 
 Every theme sets the same 21 colour tokens as `--lq-<token>` custom properties on
-`[data-lq-theme="<id>"]`. Text roles meet WCAG AA (4.5:1) on the surfaces they sit on, with
-two exceptions that are held to 3:1: `text-subtle` (timestamps and hints, never body copy) and
-`border-strong` (outlines that must be seen). `accent-soft` and `scrim` are translucent
+`[data-lq-theme="<id>"]`. Text roles meet WCAG AA (4.5:1) on the surfaces they sit on. Two
+non-text roles are held to 3:1: `text-subtle` and `border-strong` (outlines that must be seen).
+**`text-subtle` is for non-text decoration only** (chevrons, icons): any text, including
+hints, list markers and notes, uses `text-muted` or stronger. `accent-soft` and `scrim` are translucent
 (`#rrggbbaa`) and never used in contrast pairs.
 
 <!-- gen:palette:start -->
@@ -58,7 +59,7 @@ two exceptions that are held to 3:1: `text-subtle` (timestamps and hints, never 
 | `--lq-border-strong` | Warm Slate | `#8a867f` | input outlines, meaningful borders (3:1 or better) |
 | `--lq-text` | Near-Black Ink | `#18181b` | body text and headings |
 | `--lq-text-muted` | Quiet Umber | `#5c5a55` | secondary text |
-| `--lq-text-subtle` | Faded Pewter | `#85827b` | timestamps and hints only (3:1, never body copy) |
+| `--lq-text-subtle` | Faded Pewter | `#85827b` | non-text decoration only: chevrons, icons (3:1, never text) |
 | `--lq-accent` | Indigo Ink | `#4f46e5` | primary actions, links, active state |
 | `--lq-accent-hover` | Deep Indigo | `#4338ca` | accent on hover or press |
 | `--lq-accent-text` | Bright White | `#ffffff` | text on accent fills |
@@ -84,7 +85,7 @@ two exceptions that are held to 3:1: `text-subtle` (timestamps and hints, never 
 | `--lq-border-strong` | Ash Grey | `#67666b` | input outlines, meaningful borders (3:1 or better) |
 | `--lq-text` | Soft Bone | `#ededeb` | body text and headings |
 | `--lq-text-muted` | Warm Fog | `#a3a19c` | secondary text |
-| `--lq-text-subtle` | Dim Smoke | `#77756f` | timestamps and hints only (3:1, never body copy) |
+| `--lq-text-subtle` | Dim Smoke | `#77756f` | non-text decoration only: chevrons, icons (3:1, never text) |
 | `--lq-accent` | Lifted Periwinkle | `#818cf8` | primary actions, links, active state |
 | `--lq-accent-hover` | Pale Periwinkle | `#a5b4fc` | accent on hover or press |
 | `--lq-accent-text` | Charcoal Ink | `#111113` | text on accent fills |
@@ -110,7 +111,7 @@ two exceptions that are held to 3:1: `text-subtle` (timestamps and hints, never 
 | `--lq-border-strong` | Driftwood | `#918675` | input outlines, meaningful borders (3:1 or better) |
 | `--lq-text` | Press Ink | `#1f1b16` | body text and headings |
 | `--lq-text-muted` | Walnut Brown | `#6b6155` | secondary text |
-| `--lq-text-subtle` | Weathered Tan | `#8f8474` | timestamps and hints only (3:1, never body copy) |
+| `--lq-text-subtle` | Weathered Tan | `#8f8474` | non-text decoration only: chevrons, icons (3:1, never text) |
 | `--lq-accent` | Terracotta | `#c2410c` | primary actions, links, active state |
 | `--lq-accent-hover` | Baked Clay | `#9a3412` | accent on hover or press |
 | `--lq-accent-text` | Paper White | `#fffaf5` | text on accent fills |
@@ -136,7 +137,7 @@ two exceptions that are held to 3:1: `text-subtle` (timestamps and hints, never 
 | `--lq-border-strong` | Steel Lavender | `#5a6792` | input outlines, meaningful borders (3:1 or better) |
 | `--lq-text` | Moonlit White | `#e6e9f2` | body text and headings |
 | `--lq-text-muted` | Mist Blue | `#9aa3bd` | secondary text |
-| `--lq-text-subtle` | Distant Haze | `#6e7896` | timestamps and hints only (3:1, never body copy) |
+| `--lq-text-subtle` | Distant Haze | `#6e7896` | non-text decoration only: chevrons, icons (3:1, never text) |
 | `--lq-accent` | Electric Teal | `#22d3ee` | primary actions, links, active state |
 | `--lq-accent-hover` | Bright Aqua | `#67e8f9` | accent on hover or press |
 | `--lq-accent-text` | Abyss Ink | `#04121a` | text on accent fills |

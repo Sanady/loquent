@@ -168,7 +168,7 @@
   .lq-widget-field select:focus {
     border-color: var(--lq-focus-ring);
     box-shadow: 0 0 0 3px var(--lq-accent-soft);
-    outline: none;
+    outline: 2px solid transparent;
   }
   .lq-widget-field [aria-invalid="true"] {
     border-color: var(--lq-danger);
