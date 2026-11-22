@@ -32,7 +32,8 @@ export function fakeApi(config: AppConfig = defaultConfig(), over: Partial<Recor
     logout: vi.fn(async () => ({ ok: true })),
     me: vi.fn(async () => ({ user: { id: "u" }, csrf: "" })),
     threads: vi.fn(async () => []),
-    thread: vi.fn(),
+    // An empty thread by default, so opening a thread in a test never rejects.
+    thread: vi.fn(async (id: string) => ({ thread: { id, title: "", updated_at: new Date(0).toISOString() }, events: [], last_run: null })),
     renameThread: vi.fn(async () => ({})),
     deleteThread: vi.fn(async () => undefined),
     runEvents: vi.fn(),

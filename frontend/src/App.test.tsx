@@ -32,7 +32,7 @@ describe("App", () => {
   });
 
   it("the sidebar shows the configured logo and app name; the header the open thread's title", async () => {
-    await renderApp(defaultConfig({ app_name: "Acme Assistant", logo_url: "branding/logo" }));
+    const { api } = await renderApp(defaultConfig({ app_name: "Acme Assistant", logo_url: "branding/logo" }));
     const nav = screen.getByRole("navigation", { name: /chats/i });
     const brand = nav.querySelector('[data-lq-part~="sidebar-header"]')!;
     expect(brand.textContent).toContain("Acme Assistant");
@@ -44,6 +44,12 @@ describe("App", () => {
     expect(title()).toBe("Acme Assistant");
     fireEvent.click(await screen.findByRole("button", { name: "Second chat" }));
     await vi.waitFor(() => expect(title()).toBe("Second chat"));
+    // Let the thread load settle inside the test, so nothing resolves after it ends.
+    await vi.waitFor(() => expect(api.thread).toHaveBeenCalledWith("t2"));
+    await act(async () => {
+      await api.thread.mock.results[0].value;
+    });
+    expect(title()).toBe("Second chat");
   });
 
   it("with the chat list hidden, the header shows the logo", async () => {
